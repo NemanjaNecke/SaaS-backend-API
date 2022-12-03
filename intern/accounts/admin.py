@@ -7,4 +7,4 @@ class AccountAdmin(admin.ModelAdmin):
 
 @admin.register(IPAddress)
 class IPAddressAdmin(admin.ModelAdmin):
-    pass
+    list_display = ['ip_address', 'account']
