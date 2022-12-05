@@ -5,10 +5,13 @@ from .models import Account, IPAddress
 from django.contrib.auth import get_user_model, authenticate
 from django.core.exceptions import ObjectDoesNotExist
 from dj_rest_auth.registration.serializers import RegisterSerializer
-from dj_rest_auth.serializers import LoginSerializer
+from dj_rest_auth.serializers import LoginSerializer, UserDetailsSerializer
 from allauth.account.adapter import get_adapter
 from ipware import get_client_ip
 
+class IPAddressSerializer(serializers.Serializer):
+    class Meta:
+        fields = ['pk', 'ip_address']
 
 class AccountRegisterSerializer(RegisterSerializer):
     username = serializers.CharField(max_length=50)
@@ -83,3 +86,10 @@ class AccountLoginSerializer(LoginSerializer):
         attrs["user"] = user
 
         return attrs
+
+class UserDetailsSerializer(UserDetailsSerializer):
+    ip_address = IPAddressSerializer
+    class Meta:
+        fields = ['email', 'username', 'first_name', 'last_name', 'ip_address']
+        read_only_fields = ('pk', 'email', 'first_name', 'last_name', 'ip_address')
+        model = Account
