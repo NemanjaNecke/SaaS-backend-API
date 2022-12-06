@@ -163,6 +163,7 @@ REST_FRAMEWORK = {
 
 REST_AUTH_SERIALIZERS = {
     'LOGIN_SERIALIZER': 'accounts.serializers.AccountLoginSerializer',
+    'USER_DETAILS_SERIALIZER': 'accounts.serializers.AccountDetailsSerializer',
 }
 
 REST_AUTH_REGISTER_SERIALIZERS = {
@@ -172,8 +173,9 @@ ACCOUNT_AUTHENTICATION_METHOD = 'email'
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 ACCOUNT_CONFIRM_EMAIL_ON_GET = True
+ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_REQUIRED = True
-LOGIN_URL = 'https://127.0.0.1:8000/auth/login'
+LOGIN_URL = 'http://127.0.0.1:8000/auth/login'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 SITE_ID = 1

@@ -30,6 +30,7 @@ class AccountRegisterSerializer(RegisterSerializer):
 
     def get_cleaned_data(self):
         return {
+            "username": self.validated_data.get("username", ""),
             "email": self.validated_data.get("email", ""),
             "first_name": self.validated_data.get("first_name", ""),
             "last_name": self.validated_data.get("last_name", ""),
@@ -41,6 +42,7 @@ class AccountRegisterSerializer(RegisterSerializer):
         adapter = get_adapter()
         user = adapter.new_user(request)
         self.cleaned_data = self.get_cleaned_data()
+        user.username = self.cleaned_data.get("username")
         user.first_name = self.cleaned_data.get("first_name")
         user.last_name = self.cleaned_data.get("last_name")
         adapter.save_user(request, user, self)
@@ -83,13 +85,14 @@ class AccountLoginSerializer(LoginSerializer):
         else:
             msg = "No email provided."
             raise exceptions.ValidationError(msg)
+        self.validate_email_verification_status(user)
         attrs["user"] = user
 
         return attrs
 
-class UserDetailsSerializer(UserDetailsSerializer):
-    ip_address = IPAddressSerializer
+class AccountDetailsSerializer(UserDetailsSerializer):
+    ip_address = serializers.StringRelatedField(many=True)
     class Meta:
         fields = ['email', 'username', 'first_name', 'last_name', 'ip_address']
-        read_only_fields = ('pk', 'email', 'first_name', 'last_name', 'ip_address')
+        read_only_fields = ('pk', 'email',)
         model = Account
