@@ -7,4 +7,4 @@ class AccountAdmin(admin.ModelAdmin):
 
 @admin.register(IPAddress)
 class IPAddressAdmin(admin.ModelAdmin):
-    list_display = ['ip_address', 'account']
+    list_display = ['ip_address', 'account', 'verified']

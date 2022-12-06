@@ -8,6 +8,8 @@ from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer, UserDetailsSerializer
 from allauth.account.adapter import get_adapter
 from ipware import get_client_ip
+from .adapter import activate_ip
+
 
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
@@ -74,6 +76,7 @@ class AccountLoginSerializer(LoginSerializer):
                     )
             
                 else:
+                    activate_ip(self.context['request'], email, ip_address)
                     msg = "IP address doesn't match. An email has been sent to verify this IP address."
                     raise serializers.ValidationError(msg, code="authorization")
                 if not user:
@@ -94,5 +97,5 @@ class AccountDetailsSerializer(UserDetailsSerializer):
     ip_address = serializers.StringRelatedField(many=True)
     class Meta:
         fields = ['email', 'username', 'first_name', 'last_name', 'ip_address']
-        read_only_fields = ('pk', 'email',)
+        read_only_fields = ('pk', 'email','ip_address')
         model = Account

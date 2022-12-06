@@ -40,8 +40,13 @@ class Account(AbstractBaseUser, Model, PermissionsMixin):
 class IPAddress(Model):
     ip_address = models.GenericIPAddressField(protocol='both', unpack_ipv4=True)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='ip_address')
-
+    verified = models.BooleanField(default=False)
+    
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('ip_address','account'), name='ip-account')
+        ]
         verbose_name_plural = 'IPAddresses'
+
     def __str__(self) -> str:
         return self.ip_address
