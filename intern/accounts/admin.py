@@ -3,7 +3,9 @@ from .models import Account, IPAddress
 # Register your models here.
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    pass
+    ordering = ['id']
+    list_display = ['email', 'username', 'first_name', 'last_name', 'is_staff']
+    list_filter = ['is_staff']
 
 @admin.register(IPAddress)
 class IPAddressAdmin(admin.ModelAdmin):

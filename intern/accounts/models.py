@@ -40,7 +40,7 @@ class Account(AbstractBaseUser, Model, PermissionsMixin):
 class IPAddress(Model):
     ip_address = models.GenericIPAddressField(protocol='both', unpack_ipv4=True)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='ip_address')
-    verified = models.BooleanField(default=False)
+    verified = models.BooleanField(default=True)
     
     class Meta:
         constraints = [
