@@ -12,6 +12,7 @@ from .adapter import account_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer
 from .models import IPAddress, Account
+import time
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -44,5 +45,6 @@ def activate(request, uidb64, token):
     if account_activation_token.check_token(uid[0], token):
 
         return Response({'detail': _('IP address verified successfully')}, status=status.HTTP_200_OK)
+        
     else:
         return Response({_('Activation link not valid')}, status=status.HTTP_404_NOT_FOUND)

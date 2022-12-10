@@ -1,6 +1,6 @@
 from faker import Faker as FakerClass
 from typing import Any, Sequence
-from factory import django, Faker, post_generation
+from factory import django, Faker, post_generation, SubFactory
 
 from ..models import Account, IPAddress
 
@@ -35,7 +35,6 @@ class AccountFactory(django.DjangoModelFactory):
 class IPAddressFactory(django.DjangoModelFactory):
     class Meta:
         model = IPAddress
-
     ip_address = Faker('ipv4')
+    account = SubFactory(AccountFactory)
     verified = True
-    account = AccountFactory.build()
