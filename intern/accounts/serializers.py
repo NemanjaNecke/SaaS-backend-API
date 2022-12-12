@@ -16,7 +16,7 @@ class IPAddressSerializer(serializers.Serializer):
         fields = ['pk', 'ip_address']
 
 class AccountRegisterSerializer(RegisterSerializer):
-    username = serializers.CharField(max_length=50)
+
     first_name = serializers.CharField(max_length=50)
     last_name = serializers.CharField(max_length=50)
 
@@ -24,7 +24,7 @@ class AccountRegisterSerializer(RegisterSerializer):
         model = Account
         fields = [
             "email",
-            "username",
+
             "first_name",
             "last_name",
             "password",
@@ -32,7 +32,7 @@ class AccountRegisterSerializer(RegisterSerializer):
 
     def get_cleaned_data(self):
         return {
-            "username": self.validated_data.get("username", ""),
+ 
             "email": self.validated_data.get("email", ""),
             "first_name": self.validated_data.get("first_name", ""),
             "last_name": self.validated_data.get("last_name", ""),
@@ -44,7 +44,6 @@ class AccountRegisterSerializer(RegisterSerializer):
         adapter = get_adapter()
         user = adapter.new_user(request)
         self.cleaned_data = self.get_cleaned_data()
-        user.username = self.cleaned_data.get("username")
         user.first_name = self.cleaned_data.get("first_name")
         user.last_name = self.cleaned_data.get("last_name")
         adapter.save_user(request, user, self)

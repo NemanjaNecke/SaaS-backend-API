@@ -22,7 +22,6 @@ class UserSignUpTestCase(APITestCase):
     def test_if_data_is_correct_then_signup(self):
         # Prepare data
         payload = {
-            'username': self.account_object.username,
             'password1': self.account_object.password,
             'password2': self.account_object.password,
             'email': self.account_object.email,
@@ -39,7 +38,7 @@ class UserSignUpTestCase(APITestCase):
         self.assertEqual(Account.objects.count(), 2)
 
         new_account = Account.objects.get(
-            username=self.account_object.username)
+            email=self.account_object.email)
 
         self.assertEqual(
             new_account.first_name,
@@ -50,10 +49,9 @@ class UserSignUpTestCase(APITestCase):
             self.account_object.email,
         )
 
-    def test_if_username_already_exists_dont_signup(self):
+    def test_if_email_already_exists_dont_signup(self):
 
         payload = {
-            'username': self.account_saved.username,
             'password1': self.account_saved.password,
             'password2': self.account_saved.password,
             'email': self.account_saved.email,
@@ -65,18 +63,15 @@ class UserSignUpTestCase(APITestCase):
             payload), content_type='application/json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(
-            str(response.data['username'][0]),
-            'Account with this username already exists.',
-        )
+
         self.assertEqual(
             str(response.data['email'][0]),
             'A user is already registered with this e-mail address.',
         )
 
-        username_query = Account.objects.filter(
-            username=self.account_saved.username)
-        self.assertEqual(username_query.count(), 1)
+        email_query = Account.objects.filter(
+            email=self.account_saved.email)
+        self.assertEqual(email_query.count(), 1)
 
 class LoginTest(APITestCase):
 

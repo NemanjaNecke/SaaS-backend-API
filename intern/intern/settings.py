@@ -177,5 +177,6 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_REQUIRED = True
 LOGIN_URL = 'http://127.0.0.1:8000/auth/login'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+ACCOUNT_USERNAME_REQUIRED = False
 
 SITE_ID = 1
