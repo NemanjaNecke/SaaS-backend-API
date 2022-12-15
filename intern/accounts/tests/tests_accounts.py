@@ -1,3 +1,4 @@
+from django.template import TemplateDoesNotExist
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -5,9 +6,12 @@ from .factory import AccountFactory, IPAddressFactory
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 import json
-from factory import Faker
-from ..models import Account
+from ..models import Account, IPAddress, Invitation
 from allauth.account.models import EmailAddress
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from ..adapter import registration_activation_token
+
 
 class UserSignUpTestCase(APITestCase):
 
@@ -16,8 +20,17 @@ class UserSignUpTestCase(APITestCase):
         super().setUpClass()
         self.account_object = AccountFactory.build()
         self.account_saved = AccountFactory.create()
+        # Admin needs to be created to create invite
+        self.admin = get_user_model().objects.create_admin(
+                'test3@gmail.com',
+                'Test123'
+            )
         self.client = APIClient()
-        self.signup_url = reverse('rest_register')
+        # Invite needs to be created so the link generation would work
+        invitation = Invitation.objects.create(email=self.account_object.email, invited_by=self.admin)
+        self.uidb64 = urlsafe_base64_encode(force_bytes(self.account_object.email))
+        self.token = registration_activation_token.make_token(self.account_object.email)
+        self.signup_url = reverse('register', args= (self.uidb64, self.token))
 
     def test_if_data_is_correct_then_signup(self):
         # Prepare data
@@ -33,9 +46,9 @@ class UserSignUpTestCase(APITestCase):
             json.dumps(payload), 
             content_type='application/json'
         )
-
+        print(response.data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Account.objects.count(), 2)
+        self.assertEqual(Account.objects.count(), 3)
 
         new_account = Account.objects.get(
             email=self.account_object.email)
@@ -63,7 +76,7 @@ class UserSignUpTestCase(APITestCase):
             payload), content_type='application/json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
+   
         self.assertEqual(
             str(response.data['email'][0]),
             'A user is already registered with this e-mail address.',
@@ -78,7 +91,7 @@ class LoginTest(APITestCase):
     def setUp(self):
         self.client = APIClient()
         self.login_url = reverse('rest_login')
-        self.verify_email_url = reverse('rest_verify_email')
+        ##self.verify_email_url = reverse('account_confirm_email')
 
     def test_login_credentials(self):
 
@@ -107,7 +120,6 @@ class LoginTest(APITestCase):
             REMOTE_ADDR=ip_address.ip_address, 
             content_type='application/json'
             )
-        print(response.data)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -148,13 +160,14 @@ class LoginTest(APITestCase):
             **payload
         )
         ip_address = '217.0.0.1'
- 
+  
         response = self.client.post(
             self.login_url, 
             json.dumps(payload), 
             REMOTE_ADDR=ip_address, 
             content_type='application/json'
             )
+     
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(

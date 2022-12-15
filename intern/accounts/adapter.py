@@ -14,6 +14,21 @@ class AccountActivationTokenGenerator(PasswordResetTokenGenerator):
         )
 
 account_activation_token = AccountActivationTokenGenerator()
+registration_activation_token = AccountActivationTokenGenerator()
+
+def send_registration_invite(request, email, company, admin):
+    mail_subject = 'This is your invatation to register for {}'.format(company)
+    message = render_to_string('account/email/register_invite.html',{
+        'account': email,
+        'admin': admin,
+        'company': company.name,
+        'domain': get_current_site(request).domain,
+        'uid': urlsafe_base64_encode(force_bytes(email)),
+        'token': registration_activation_token.make_token(email),
+        'protocol': 'https' if request.is_secure() else 'http'
+    })
+    email = EmailMessage(mail_subject, message, to=[email])
+    email.send()
 
 def activate_ip(request, email, ip_address):
     mail_subject = 'Activate your new IP address.'
@@ -26,6 +41,4 @@ def activate_ip(request, email, ip_address):
     })
     email = EmailMessage(mail_subject, message, to=[email])
     email.send()
-
-
 

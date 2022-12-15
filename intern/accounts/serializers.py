@@ -1,25 +1,23 @@
-from rest_framework import serializers
-from .models import Account, IPAddress
 from rest_framework import serializers, exceptions
-from .models import Account, IPAddress
+from .models import Account, IPAddress, Invitation, Company
 from django.contrib.auth import get_user_model, authenticate
 from django.core.exceptions import ObjectDoesNotExist
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer, UserDetailsSerializer
-from allauth.account.adapter import get_adapter
-from ipware import get_client_ip
 from .adapter import activate_ip
-
+from ipware import get_client_ip
+from allauth.account.adapter import get_adapter 
+from .adapter import send_registration_invite
 
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
-        fields = ['pk', 'ip_address']
+        model = IPAddress
+        fields = ['ip_address']
 
 class AccountRegisterSerializer(RegisterSerializer):
-
     first_name = serializers.CharField(max_length=50)
     last_name = serializers.CharField(max_length=50)
-
+    username = None
     class Meta:
         model = Account
         fields = [
@@ -32,7 +30,6 @@ class AccountRegisterSerializer(RegisterSerializer):
 
     def get_cleaned_data(self):
         return {
- 
             "email": self.validated_data.get("email", ""),
             "first_name": self.validated_data.get("first_name", ""),
             "last_name": self.validated_data.get("last_name", ""),
@@ -40,10 +37,13 @@ class AccountRegisterSerializer(RegisterSerializer):
             "password2": self.validated_data.get("password2", ""),
         }
 
+# self.context.get('request').META.get("REMOTE_ADDR")
+
     def save(self, request):
         adapter = get_adapter()
         user = adapter.new_user(request)
         self.cleaned_data = self.get_cleaned_data()
+
         user.first_name = self.cleaned_data.get("first_name")
         user.last_name = self.cleaned_data.get("last_name")
         adapter.save_user(request, user, self)
@@ -52,6 +52,7 @@ class AccountRegisterSerializer(RegisterSerializer):
         ip_address = {"ip_address": get_client_ip(request)[0]}
         IPAddress.objects.create(account=user, **ip_address)
 
+        # print(user.ip_address)
         return user
 
 
@@ -73,10 +74,10 @@ class AccountLoginSerializer(LoginSerializer):
                     email=email,
                     password=password,
                     )
-            
                 else:
                     activate_ip(self.context['request'], email, ip_address)
                     msg = "IP address doesn't match. An email has been sent to verify this IP address."
+
                     raise serializers.ValidationError(msg, code="authorization")
                 if not user:
                     msg = "Invalid credentials."
@@ -88,13 +89,46 @@ class AccountLoginSerializer(LoginSerializer):
             msg = "No email provided."
             raise exceptions.ValidationError(msg)
         self.validate_email_verification_status(user)
+
         attrs["user"] = user
 
         return attrs
 
-class AccountDetailsSerializer(UserDetailsSerializer):
+class AccountDetailsSerializer(serializers.ModelSerializer):
     ip_address = serializers.StringRelatedField(many=True)
     class Meta:
-        fields = ['email', 'username', 'first_name', 'last_name', 'ip_address']
-        read_only_fields = ('pk', 'email','ip_address')
         model = Account
+        fields = ['email', 'first_name', 'last_name', 'ip_address']
+        read_only_fields = ('pk', 'email', 'ip_address')
+
+class CompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ['id','name', 'admin', 'active_until', 'is_active', 'accounts']
+        read_only_fields = ['id', 'accounts']
+        lookup_field = 'name'
+        extra_kwargs = {
+            'url': {'lookup_field': 'name'}
+        }
+
+class InvitationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Invitation
+        fields = ['id','email', 'invited_by', 'accepted']
+        read_only_fields = ('id',)
+
+    def get_cleaned_data(self):
+        return {
+            "email": self.validated_data.get("email", ""),
+            "invited_by": self.validated_data.get("invited_by","")
+        }
+
+    def save(self, instance, request):        
+        self.cleaned_data = self.get_cleaned_data()
+        instance.email = self.cleaned_data.get("email")
+        instance.invited_by = self.cleaned_data.get("invited_by")
+        print(instance.invited_by.pk)
+        company = Company.objects.get(admin=instance.invited_by.pk)
+        instance.save()
+        send_registration_invite(request, instance.email, company, instance.invited_by)
+        return instance

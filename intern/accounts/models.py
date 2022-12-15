@@ -1,8 +1,9 @@
+from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from utils.model_abstracts import Model
+from django.utils.translation import gettext_lazy as _
 from datetime import datetime, timedelta
-from django.utils import timezone
 
 
 class AccountManager(BaseUserManager):
@@ -17,7 +18,7 @@ class AccountManager(BaseUserManager):
 
         return account
 
-    def create_admin(self, email, password):
+    def create_admin(self, email, password, **extrafields):
         account = self.create_account(
             email=self.normalize_email(email), password=password)
         account.is_staff = True
@@ -41,6 +42,7 @@ class AccountManager(BaseUserManager):
             email=self.normalize_email(email), password=password)
         account.is_staff = True
         account.is_admin = True
+        account.is_superamdin = True
         account.is_superuser = True
         account.save(using=self.db)
 
@@ -100,13 +102,13 @@ class Company(Model):
 
     def deactivate(self, account):
         if account.is_superadmin:
-            # Proceed with deactivating the company
+            '''Proceed with deactivating the company'''
             self.active_until = timezone.make_aware(
             datetime.now() - timedelta(days=90)
             )
             self.save()
         else:
-            # The user is not a superadmin, so do not allow them to deactivate the company
+            '''The user is not a superadmin, so do not allow them to deactivate the company'''
             raise PermissionError('Only superadmins can deactivate a company')
 
     class Meta:
@@ -115,3 +117,15 @@ class Company(Model):
             models.UniqueConstraint(fields=['admin'],
                                     name='unique_admin_user')
         ]
+
+
+class Invitation(Model):
+    email = models.EmailField(max_length=255)
+    accepted = models.BooleanField(default=False)
+    invited_by = models.ForeignKey(
+        Account, on_delete=models.CASCADE, related_name="invitations"
+    )
+    '''Accept invite function to call when user clicks on link in email'''
+    def accept(self):
+        self.accepted = True
+        self.save()

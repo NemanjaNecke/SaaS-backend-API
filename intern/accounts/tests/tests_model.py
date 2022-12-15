@@ -1,41 +1,42 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from ..models import IPAddress, Company
+from ..models import IPAddress, Company, Account, Invitation
+from .factory import AccountFactory
 from datetime import datetime, timedelta
 from django.utils import timezone
-from .factory import AccountFactory
+
 
 class ModelTests(TestCase):
 
     def test_create_account_with_email(self):
         email = 'test@gmail.com'
         password = 'testpass123'
-        user = get_user_model().objects.create_account(
+        account = get_user_model().objects.create_account(
             email=email,
             password=password
         )
 
-        self.assertEqual(user.email, email)
-        self.assertTrue(user.check_password(password))
+        self.assertEqual(account.email, email)
+        self.assertTrue(account.check_password(password))
 
     def test_account_email_normalizer(self):
         email = 'test@GMAIL.COM'
-        user = get_user_model().objects.create_account(email, 'test123')
+        account = get_user_model().objects.create_account(email, 'test123')
 
-        self.assertEqual(user.email, email.lower())
+        self.assertEqual(account.email, email.lower())
 
     def test_account_email_invalid(self):
         with self.assertRaises(ValueError):
             get_user_model().objects.create_account(None, 'test123')
 
     def test_create_super_user(self):
-        user = get_user_model().objects.create_superuser(
+        account = get_user_model().objects.create_superuser(
             'test@gmail.com',
             'Test123'
         )
 
-        self.assertTrue(user.is_superuser)
-        self.assertTrue(user.is_staff)
+        self.assertTrue(account.is_superuser)
+        self.assertTrue(account.is_staff)
 
     def test_ip_address(self):
         account = get_user_model().objects.create_account(
@@ -48,7 +49,7 @@ class ModelTests(TestCase):
         self.assertEqual(ip_address.ip_address, ip)
         self.assertEqual(ip_address.account, account)
         self.assertTrue(ip_address.verified)
-        
+    
     def test_admin_user(self):
         account = get_user_model().objects.create_admin(
                 'test@gmail.com',
@@ -136,3 +137,31 @@ class CompanyModelTestCase(TestCase):
 
         # The company should no longer be active
         self.assertFalse(self.company.is_active)
+
+class InvitationModelTestCase(TestCase):
+
+    def setUp(self):
+        self.account1, self.account2, self.account3, self.account4, self.account5, self.account6 = AccountFactory.create_batch(6)
+        self.admin = get_user_model().objects.create_admin(
+                'test2@gmail.com',
+                'Test123'
+            )
+        self.admin2 = get_user_model().objects.create_admin(
+                'test3@gmail.com',
+                'Test123'
+            )
+    def test_invitation_model(self):
+    # Create an invitation
+        invitation = Invitation.objects.create(
+        email="test@example.com",
+        invited_by=self.admin
+        )
+        self.assertFalse(invitation.accepted)
+
+    # Accept the invitation
+        invitation.accept()
+        self.assertTrue(invitation.accepted)
+
+    # Check that the invitation was saved
+        invitation.refresh_from_db()
+        self.assertTrue(invitation.accepted)
