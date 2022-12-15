@@ -20,7 +20,7 @@ class UserSignUpTestCase(APITestCase):
         super().setUpClass()
         self.account_object = AccountFactory.build()
         self.account_saved = AccountFactory.create()
-        # Admin needs to be created to create invite
+        # Admin needs to be created to create an invite
         self.admin = get_user_model().objects.create_admin(
                 'test3@gmail.com',
                 'Test123'
