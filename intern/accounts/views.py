@@ -17,6 +17,12 @@ from .serializers import CompanySerializer, InvitationSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
+from allauth.account.utils import complete_signup
+from django.conf import settings
+from allauth.account import app_settings as allauth_settings
+from dj_rest_auth.app_settings import create_token
+from dj_rest_auth.utils import jwt_encode
+
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -108,8 +114,11 @@ class InviteOnlyRegistrationView(RegisterView):
     This would involve checking the "uid" and "token" parameters in the URL,
     and verifying that they match a valid invitation in the database
     '''
+    
     def is_valid_invitation_link(self, request, uid, token):
-        email = force_str(urlsafe_base64_decode(uid))
+        uid = force_str(urlsafe_base64_decode(uid)).split('/')
+        email = uid[0]
+        self.company = uid[1]
         '''Check if a valid invitation exists in the database 
         for the given email address and token
         '''
@@ -121,8 +130,7 @@ class InviteOnlyRegistrationView(RegisterView):
         if invitation:
             invitation.accept()
             invitation.save()
-
-    # If a valid invitation is found, return True
+        '''If a valid invitation is found, return True'''
         return True
 
     def dispatch(self, request, *args, **kwargs):
@@ -138,7 +146,28 @@ class InviteOnlyRegistrationView(RegisterView):
             response.accepted_media_type = "application/json"
             response.renderer_context = {'request': request}
             return response
+
         '''
         If the invitation link is valid, proceed with the registration process
         '''
         return super().dispatch(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        company = Company.objects.filter(pk=self.company).first()
+        user = serializer.save(self.request, company=company)
+        if allauth_settings.EMAIL_VERIFICATION != \
+                allauth_settings.EmailVerificationMethod.MANDATORY:
+            if getattr(settings, 'REST_USE_JWT', False):
+                self.access_token, self.refresh_token = jwt_encode(user)
+            elif not getattr(settings, 'REST_SESSION_LOGIN', False):
+                # Session authentication isn't active either, so this has to be
+                #  token authentication
+                create_token(self.token_model, user, serializer)
+
+        complete_signup(
+            self.request._request, user,
+            allauth_settings.EMAIL_VERIFICATION,
+            None,
+        )
+        return user
+      

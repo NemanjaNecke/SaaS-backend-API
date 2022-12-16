@@ -23,7 +23,7 @@ def send_registration_invite(request, email, company, admin):
         'admin': admin,
         'company': company.name,
         'domain': get_current_site(request).domain,
-        'uid': urlsafe_base64_encode(force_bytes(email)),
+        'uid': urlsafe_base64_encode(force_bytes(email+'/'+str(company.pk))),
         'token': registration_activation_token.make_token(email),
         'protocol': 'https' if request.is_secure() else 'http'
     })

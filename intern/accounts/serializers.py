@@ -22,7 +22,6 @@ class AccountRegisterSerializer(RegisterSerializer):
         model = Account
         fields = [
             "email",
-
             "first_name",
             "last_name",
             "password",
@@ -37,15 +36,14 @@ class AccountRegisterSerializer(RegisterSerializer):
             "password2": self.validated_data.get("password2", ""),
         }
 
-# self.context.get('request').META.get("REMOTE_ADDR")
 
-    def save(self, request):
+    def save(self, request, company):
         adapter = get_adapter()
         user = adapter.new_user(request)
         self.cleaned_data = self.get_cleaned_data()
-
         user.first_name = self.cleaned_data.get("first_name")
         user.last_name = self.cleaned_data.get("last_name")
+        user.company = company
         adapter.save_user(request, user, self)
         user.save()
         '''Save the IP address of the user on sign up to use it as the default IP address'''
@@ -94,13 +92,6 @@ class AccountLoginSerializer(LoginSerializer):
 
         return attrs
 
-class AccountDetailsSerializer(serializers.ModelSerializer):
-    ip_address = serializers.StringRelatedField(many=True)
-    class Meta:
-        model = Account
-        fields = ['email', 'first_name', 'last_name', 'ip_address']
-        read_only_fields = ('pk', 'email', 'ip_address')
-
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
@@ -110,6 +101,14 @@ class CompanySerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'url': {'lookup_field': 'name'}
         }
+
+class AccountDetailsSerializer(serializers.ModelSerializer):
+    ip_address = serializers.StringRelatedField(many=True)
+    company = serializers.StringRelatedField()
+    class Meta:
+        model = Account
+        fields = ['email', 'first_name', 'last_name', 'ip_address', 'company']
+        read_only_fields = ('pk', 'email', 'ip_address')
 
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:

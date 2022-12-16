@@ -117,7 +117,9 @@ class Company(Model):
             models.UniqueConstraint(fields=['admin'],
                                     name='unique_admin_user')
         ]
-
+        
+    def __str__(self) -> str:
+        return self.name
 
 class Invitation(Model):
     email = models.EmailField(max_length=255)
