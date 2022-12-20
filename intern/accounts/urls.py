@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from dj_rest_auth.registration.views import VerifyEmailView, ConfirmEmailView
-from .views import ResendEmailVerificationView, activate, CompanyViewSet, InvitationViewSet
+from .views import AdminAccountCreateView, AdminAccountView, ResendEmailVerificationView, activate, CompanyViewSet, InvitationViewSet
 from dj_rest_auth.views import PasswordResetConfirmView
 from .views import InviteOnlyRegistrationView
 
@@ -10,13 +10,17 @@ router = routers.DefaultRouter()
 router.register(r'invites', InvitationViewSet)
 
 urlpatterns = [
+    path(r'auth/register/admin/', AdminAccountCreateView.as_view(), name='create-company-admin'),
+    path(r'auth/accounts/admin', AdminAccountView.as_view(), name='admins'),
     path('auth/register/<uidb64>/<token>',
          InviteOnlyRegistrationView.as_view(), name='register'),
     path(r'', include(router.urls)),
     path(r'companies/',
          CompanyViewSet.as_view({'get': 'list', 'post': 'create'}), name='companies'),
-    path(r'companies/<name>/', CompanyViewSet.as_view(
+    path(r'companies/<name>/deactivate', CompanyViewSet.as_view(
         {'get': 'retrieve', 'put': 'deactivate_company'}), name='companies_detail'),
+    path(r'companies/<name>/activate', CompanyViewSet.as_view(
+        {'get': 'retrieve', 'put': 'activate_company'}), name='companies_detail'),
     path(
         r'auth/registration/account-confirm-email/<str:key>/',
         ConfirmEmailView.as_view(),

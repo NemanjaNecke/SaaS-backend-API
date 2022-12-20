@@ -131,3 +131,13 @@ class InvitationSerializer(serializers.ModelSerializer):
         instance.save()
         send_registration_invite(request, instance.email, company, instance.invited_by)
         return instance
+
+class AccountsSerializer(serializers.ModelSerializer):
+    password1 = serializers.CharField(write_only=True)
+    password2 = serializers.CharField(write_only=True)
+    class Meta:
+        model = Account
+        fields = ['id',
+            "email",'password1', 'password2'
+            "first_name",
+            "last_name",]

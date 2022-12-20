@@ -1,3 +1,4 @@
+from django.forms import ValidationError
 from django.shortcuts import redirect, get_object_or_404
 from rest_framework import viewsets, generics, mixins, renderers
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,7 +14,7 @@ from django.utils.encoding import force_bytes, force_str
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from .serializers import CompanySerializer, InvitationSerializer
+from .serializers import AccountsSerializer, CompanySerializer, InvitationSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -22,7 +23,7 @@ from django.conf import settings
 from allauth.account import app_settings as allauth_settings
 from dj_rest_auth.app_settings import create_token
 from dj_rest_auth.utils import jwt_encode
-
+from django.contrib.auth.hashers import make_password
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -68,7 +69,7 @@ class CompanyViewSet(mixins.CreateModelMixin,
                     mixins.ListModelMixin,
                     mixins.RetrieveModelMixin,
                     viewsets.GenericViewSet):
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
     lookup_field = 'name'
@@ -91,14 +92,22 @@ class CompanyViewSet(mixins.CreateModelMixin,
 
         company.deactivate(account)
         company.save()
-        self.deactivate_company()
         return Response(serializer.data)
+    @action(detail=True, methods=['put'], permission_classes=[IsSuperAdmin])
+    def activate_company(self, request, pk=None, name=None):
+        
+        account = request.user    
+        company  = get_object_or_404(self.queryset)
+        serializer = CompanySerializer(company)
 
+        company.activate(account)
+        company.save()
+        return Response(serializer.data)
 
 class InvitationViewSet(viewsets.ModelViewSet):
     serializer_class = InvitationSerializer
     queryset = Invitation.objects.all()
-
+    permission_classes = [IsSuperAdmin or IsCompanyAdmin]
     def create(self, request):
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -175,4 +184,28 @@ class InviteOnlyRegistrationView(RegisterView):
         invitation.used = True
         invitation.save()
         return user
+
+class AdminAccountView(generics.ListAPIView):
+    serializer_class = AccountsSerializer
+    permission_classes = [IsSuperAdmin]
+    def get_queryset(self):
+        return Account.objects.filter(is_companyadmin=True)
       
+class AdminAccountCreateView(generics.CreateAPIView):
+    serializer_class = AccountsSerializer
+    permission_classes = [IsSuperAdmin]
+
+    def create(self, request, *args, **kwargs):
+        password1 = request.data.get('password1')
+        password2 = request.data.get('password2')
+        if password1 and password2 and password1 == password2:
+            return super().create(request, *args, **kwargs)
+        else:
+            return Response({'password': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    def perform_create(self, serializer):
+        password1 = self.request.data.get('password1')
+        password2 = self.request.data.get('password2')
+        if password1 and password2 and password1 == password2:
+            serializer.save(is_companyadmin=True, is_staff=True, password=make_password(password1))
+        else:
+            raise ValidationError({'password': 'Passwords do not match'})

@@ -42,7 +42,7 @@ class AccountManager(BaseUserManager):
             email=self.normalize_email(email), password=password)
         account.is_staff = True
         account.is_admin = True
-        account.is_superamdin = True
+        account.is_superadmin = True
         account.is_superuser = True
         account.save(using=self.db)
 
@@ -110,6 +110,17 @@ class Company(Model):
         else:
             '''The user is not a superadmin, so do not allow them to deactivate the company'''
             raise PermissionError('Only superadmins can deactivate a company')
+
+    def activate(self, account):
+        if account.is_superadmin:
+            '''Proceed with activating the company'''
+            self.active_until = timezone.make_aware(
+            datetime.now() + timedelta(days=90)
+            )
+            self.save()
+        else:
+            '''The user is not a superadmin, so do not allow them to activate the company'''
+            raise PermissionError('Only superadmins can activate a company')
 
     class Meta:
         verbose_name_plural = 'Companies'
