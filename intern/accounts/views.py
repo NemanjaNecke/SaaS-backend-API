@@ -14,7 +14,7 @@ from django.utils.encoding import force_bytes, force_str
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from .serializers import AccountsSerializer, CompanySerializer, InvitationSerializer
+from .serializers import AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -198,14 +198,25 @@ class AdminAccountCreateView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         password1 = request.data.get('password1')
         password2 = request.data.get('password2')
+
         if password1 and password2 and password1 == password2:
-            return super().create(request, *args, **kwargs)
+            # Validate the passwords and create a new Account instance
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         else:
             return Response({'password': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
     def perform_create(self, serializer):
-        password1 = self.request.data.get('password1')
-        password2 = self.request.data.get('password2')
-        if password1 and password2 and password1 == password2:
-            serializer.save(is_companyadmin=True, is_staff=True, password=make_password(password1))
+        password = self.request.data.get('password1')
+
+        if password:
+            serializer.save(is_companyadmin=True, is_staff=True, password=make_password(password))
         else:
             raise ValidationError({'password': 'Passwords do not match'})
+
+
+class IpAddressView(generics.ListAPIView):
+    serializer_class = IPAddressFullSerializer
+    queryset = IPAddress.objects.all()

@@ -133,11 +133,17 @@ class InvitationSerializer(serializers.ModelSerializer):
         return instance
 
 class AccountsSerializer(serializers.ModelSerializer):
-    password1 = serializers.CharField(write_only=True)
-    password2 = serializers.CharField(write_only=True)
     class Meta:
         model = Account
         fields = ['id',
-            "email",'password1', 'password2'
+            "email",
             "first_name",
             "last_name",]
+
+        
+class IPAddressFullSerializer(serializers.ModelSerializer):
+    account = serializers.StringRelatedField()
+
+    class Meta:
+        model = IPAddress
+        fields = ['id', 'ip_address', 'verified', 'account']
