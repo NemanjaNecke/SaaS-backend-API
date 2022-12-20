@@ -127,6 +127,7 @@ class Invitation(Model):
     invited_by = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name="invitations"
     )
+    used = models.BooleanField(default=False)
     '''Accept invite function to call when user clicks on link in email'''
     def accept(self):
         self.accepted = True

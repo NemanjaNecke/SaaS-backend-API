@@ -21,4 +21,4 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(Invitation)
 class InviteAdmin(admin.ModelAdmin):
-    list_display = ['email', 'accepted', 'invited_by']
+    list_display = ['email', 'accepted', 'invited_by', 'used']

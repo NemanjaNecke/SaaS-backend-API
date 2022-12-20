@@ -113,8 +113,8 @@ class AccountDetailsSerializer(serializers.ModelSerializer):
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invitation
-        fields = ['id','email', 'invited_by', 'accepted']
-        read_only_fields = ('id',)
+        fields = ['id','email', 'invited_by', 'accepted', 'used']
+        read_only_fields = ('id','accepted', 'used')
 
     def get_cleaned_data(self):
         return {

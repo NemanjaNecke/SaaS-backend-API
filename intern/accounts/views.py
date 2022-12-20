@@ -50,11 +50,11 @@ class ResendEmailVerificationView(generics.CreateAPIView):
 @renderer_classes((JSONRenderer,))
 def activate(request, uidb64, token):
     uid = force_str(urlsafe_base64_decode(uidb64)).split('-')
-
+    account = Account.objects.get(email=uid[0])
     ip_address = {"ip_address": uid[1], "verified": True}
     ip_address = IPAddress.objects.create(
-        account=Account.objects.get(email=uid[0]), **ip_address)
-
+        account=account, **ip_address)
+    
     if account_activation_token.check_token(uid[0], token):
 
         return Response({'detail': _('IP address verified successfully')}, status=status.HTTP_200_OK)
@@ -119,14 +119,16 @@ class InviteOnlyRegistrationView(RegisterView):
         uid = force_str(urlsafe_base64_decode(uid)).split('/')
         email = uid[0]
         self.company = uid[1]
-        '''Check if a valid invitation exists in the database 
+        '''
+        Check if a valid invitation exists in the database 
         for the given email address and token
         '''
         invitation = Invitation.objects.filter(email=email).first()
-        if invitation is None:
-            '''Check if token is valid for given user'''
-            if not registration_activation_token.check_token(uid, token):
-                return False
+        '''Check if token is valid for given user and if the invite exists'''
+        if invitation is None or invitation.used ==True or not registration_activation_token.check_token(email, token):
+            
+            
+            return False
         if invitation:
             invitation.accept()
             invitation.save()
@@ -169,5 +171,8 @@ class InviteOnlyRegistrationView(RegisterView):
             allauth_settings.EMAIL_VERIFICATION,
             None,
         )
+        invitation = Invitation.objects.filter(email=user.email).first()
+        invitation.used = True
+        invitation.save()
         return user
       
