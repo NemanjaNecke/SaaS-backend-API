@@ -24,6 +24,7 @@ from allauth.account import app_settings as allauth_settings
 from dj_rest_auth.app_settings import create_token
 from dj_rest_auth.utils import jwt_encode
 from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -53,8 +54,11 @@ def activate(request, uidb64, token):
     uid = force_str(urlsafe_base64_decode(uidb64)).split('-')
     account = Account.objects.get(email=uid[0])
     ip_address = {"ip_address": uid[1], "verified": True}
-    ip_address = IPAddress.objects.create(
-        account=account, **ip_address)
+    try:
+        ip_address = IPAddress.objects.create(
+            account=account, **ip_address)
+    except IntegrityError:
+        return Response({_('Activation link already used')}, status=status.HTTP_404_NOT_FOUND)
     
     if account_activation_token.check_token(uid[0], token):
 
@@ -110,10 +114,14 @@ class InvitationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperAdmin or IsCompanyAdmin]
     def create(self, request):
         serializer = self.get_serializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        invitation = Invitation(**serializer.validated_data)
-        invitation = serializer.save(invitation, request)
-        response_data = serializer.data
+        try:
+            serializer.is_valid(raise_exception=True)
+            invitation = Invitation(**serializer.validated_data)
+            invitation = serializer.save(invitation, request)
+            response_data = serializer.data
+        except ValidationError as e:
+            return Response({'error': e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        
         response_data.update({'detail': _('Invite sent successfully')})
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -191,6 +199,13 @@ class AdminAccountView(generics.ListAPIView):
     def get_queryset(self):
         return Account.objects.filter(is_companyadmin=True)
       
+class UserAccountView(generics.RetrieveAPIView):
+    serializer_class = AccountsSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self):
+        return self.request.user
+
 class AdminAccountCreateView(generics.CreateAPIView):
     serializer_class = AccountsSerializer
     permission_classes = [IsSuperAdmin]

@@ -8,7 +8,9 @@ from .adapter import activate_ip
 from ipware import get_client_ip
 from allauth.account.adapter import get_adapter 
 from .adapter import send_registration_invite
+from rest_framework.response import Response
 
+from rest_framework.exceptions import ValidationError
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
         model = IPAddress
@@ -126,8 +128,11 @@ class InvitationSerializer(serializers.ModelSerializer):
         self.cleaned_data = self.get_cleaned_data()
         instance.email = self.cleaned_data.get("email")
         instance.invited_by = self.cleaned_data.get("invited_by")
-        print(instance.invited_by.pk)
-        company = Company.objects.get(admin=instance.invited_by.pk)
+
+        try:
+            company = Company.objects.get(admin=instance.invited_by.pk)
+        except ObjectDoesNotExist:
+            raise ValidationError("Company not found")
         instance.save()
         send_registration_invite(request, instance.email, company, instance.invited_by)
         return instance
