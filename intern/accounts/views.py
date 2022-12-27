@@ -14,7 +14,7 @@ from django.utils.encoding import force_bytes, force_str
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from .serializers import AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer
+from accounts.serializers import AccountDetailsSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -25,6 +25,7 @@ from dj_rest_auth.app_settings import create_token
 from dj_rest_auth.utils import jwt_encode
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
+from dj_rest_auth.views import PasswordResetView
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -46,6 +47,9 @@ class ResendEmailVerificationView(generics.CreateAPIView):
         else:
             return Response({_('Email not found')}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': _('ok')}, status=status.HTTP_200_OK)
+
+class CustomPasswordResetView(PasswordResetView):
+    serializer_class = PasswordResetSerializer
 
 
 @api_view(('GET',))
@@ -200,7 +204,7 @@ class AdminAccountView(generics.ListAPIView):
         return Account.objects.filter(is_companyadmin=True)
       
 class UserAccountView(generics.RetrieveAPIView):
-    serializer_class = AccountsSerializer
+    serializer_class = AccountDetailsSerializer
     permission_classes = [IsAuthenticated]
     
     def get_object(self):
@@ -234,4 +238,12 @@ class AdminAccountCreateView(generics.CreateAPIView):
 
 class IpAddressView(generics.ListAPIView):
     serializer_class = IPAddressFullSerializer
-    queryset = IPAddress.objects.all()
+
+    def get_queryset(self):
+        # Get the logged in user
+        user = self.request.user
+        # If the user is a superuser, return the full queryset
+        if user.is_superadmin:
+            return IPAddress.objects.all()
+        # Otherwise, return only the objects that belong to the user
+        return IPAddress.objects.filter(account=user)

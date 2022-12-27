@@ -1,9 +1,9 @@
 from django.urls import path, include
 from rest_framework import routers
 from dj_rest_auth.registration.views import VerifyEmailView, ConfirmEmailView
-from .views import AdminAccountCreateView, AdminAccountView, IpAddressView, ResendEmailVerificationView, UserAccountView, activate, CompanyViewSet, InvitationViewSet
+from .views import AdminAccountCreateView, AdminAccountView, CustomPasswordResetView, IpAddressView, ResendEmailVerificationView, UserAccountView, activate, CompanyViewSet, InvitationViewSet, InviteOnlyRegistrationView
 from dj_rest_auth.views import PasswordResetConfirmView
-from .views import InviteOnlyRegistrationView
+
 
 
 router = routers.DefaultRouter()
@@ -26,6 +26,7 @@ urlpatterns = [
         ConfirmEmailView.as_view(),
         name='account_confirm_email'
     ),
+    path('auth/password/reset/', CustomPasswordResetView.as_view(), name='password_reset'),
     path(
         'auth/password/reset/confirm/<slug:uidb64>/<slug:token>/',
         PasswordResetConfirmView.as_view(), name='password_reset_confirm'

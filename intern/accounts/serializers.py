@@ -3,14 +3,21 @@ from .models import Account, IPAddress, Invitation, Company
 from django.contrib.auth import get_user_model, authenticate
 from django.core.exceptions import ObjectDoesNotExist
 from dj_rest_auth.registration.serializers import RegisterSerializer
-from dj_rest_auth.serializers import LoginSerializer, UserDetailsSerializer
+from dj_rest_auth.serializers import LoginSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer
 from .adapter import activate_ip
 from ipware import get_client_ip
 from allauth.account.adapter import get_adapter 
 from .adapter import send_registration_invite
 from rest_framework.response import Response
-
 from rest_framework.exceptions import ValidationError
+from django.conf import settings
+from dj_rest_auth.forms import AllAuthPasswordResetForm
+from django.utils.encoding import force_str
+from allauth.account.forms import default_token_generator
+from django.utils.http import urlsafe_base64_decode as uid_decoder
+from django.contrib.auth.forms import PasswordResetForm
+
+
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
         model = IPAddress
@@ -106,11 +113,49 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class AccountDetailsSerializer(serializers.ModelSerializer):
     ip_address = serializers.StringRelatedField(many=True)
-    company = serializers.StringRelatedField()
+    company = serializers.SlugRelatedField(
+        slug_field='name',
+        queryset=Company.objects.all()
+    )
     class Meta:
         model = Account
-        fields = ['email', 'first_name', 'last_name', 'ip_address', 'company']
+        fields = ['id','email', 'first_name', 'last_name', 'ip_address', 'company']
         read_only_fields = ('pk', 'email', 'ip_address')
+
+class PasswordResetSerializer(PasswordResetSerializer):
+    @property
+    def password_reset_form_class(self):
+        use_custom_email_template = bool(self.get_email_options().get("html_email_template_name", ''))
+        if 'allauth' in settings.INSTALLED_APPS and not use_custom_email_template:
+            return AllAuthPasswordResetForm
+        else:
+            return PasswordResetForm
+    def get_email_options(self):
+        return {
+            'html_email_template_name': 'account/email/password_reset_email.html',
+        }
+
+class CustomPasswordResetConfirmSerializer(PasswordResetConfirmSerializer):
+    def validate(self, attrs):
+        # Decode the uidb64 (allauth use base36) to uid to get User object
+        try:
+            uid = force_str(uid_decoder(attrs['uid']))
+            self.user = Account.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, ObjectDoesNotExist):
+            raise ValidationError({'uid': ['Invalid value']})
+
+        if not default_token_generator.check_token(self.user, attrs['token']):
+            raise ValidationError({'token': ['Invalid value']})
+
+        self.custom_validation(attrs)
+        # Construct SetPasswordForm instance
+        self.set_password_form = self.set_password_form_class(
+            user=self.user, data=attrs,
+        )
+        if not self.set_password_form.is_valid():
+            raise serializers.ValidationError(self.set_password_form.errors)
+
+        return attrs
 
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:

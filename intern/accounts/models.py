@@ -60,7 +60,7 @@ class Account(AbstractBaseUser, Model, PermissionsMixin):
     company = models.ForeignKey(
         "Company", on_delete=models.CASCADE, related_name="accounts",
         null=True, blank=True)
-
+    date_joined = models.DateTimeField(default=timezone.make_aware(datetime.now()))
     objects = AccountManager()
 
     USERNAME_FIELD = 'email'
@@ -143,3 +143,19 @@ class Invitation(Model):
     def accept(self):
         self.accepted = True
         self.save()
+
+class Task(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('error_open', 'Closed opened in error')
+    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    due_date = models.DateTimeField()
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    responsible_user = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='tasks_responsible')
+    created_by = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='tasks_created')
