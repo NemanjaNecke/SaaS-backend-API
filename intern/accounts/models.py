@@ -144,18 +144,43 @@ class Invitation(Model):
         self.accepted = True
         self.save()
 
-class Task(models.Model):
+class Task(Model):
     STATUS_CHOICES = (
+        ('open', 'Opened'),
+        ('assigned', 'Assigned'),
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('error_open', 'Closed opened in error')
     )
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
-    description = models.CharField(max_length=255)
-    due_date = models.DateTimeField()
+    CURRENCY_CHOICES = (
+        ('EUR', 'EURO'),
+        ('USD', 'American Dolar'),
+        ('RUB', 'Russian ruble'),
+        ('BAM', 'Bosnia and Herzegovina convertible mark'),
+        ('RSD', 'Serbian Dinar')
+    )
+    PRIORITY_CHOICES = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High')
+    )
+    CATEGORY_CHOICES = (
+        ('sales', 'Sales'),
+        ('marketing', 'Marketing'),
+        ('finance', 'Finance'),
+        ('tech', 'Technology'),
+        ('hr', 'Human Resources')
+    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='company')
+    description = models.CharField(max_length=500)
+    due_date = models.DateTimeField(default=timezone.make_aware(datetime.now() + timedelta(days=1)))
     status = models.CharField(max_length=30, choices=STATUS_CHOICES)
     value = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=3)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='EDIT')
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES)
     responsible_user = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='tasks_responsible')
     created_by = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='tasks_created')
+    notification = models.BooleanField(default=True)
+    notification_date = models.DateTimeField(null=True,blank=True,default=timezone.make_aware(datetime.now() + timedelta(days=3)))
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='EDIT')

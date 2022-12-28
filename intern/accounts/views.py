@@ -7,14 +7,15 @@ from rest_framework.decorators import action
 from allauth.account.models import EmailAddress
 from dj_rest_auth.registration.serializers import ResendEmailVerificationSerializer
 from rest_framework import status
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
-from .models import IPAddress, Account, Company, Invitation
+from accounts.models import IPAddress, Account, Company, Invitation, Task
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from accounts.serializers import AccountDetailsSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer
+from accounts.serializers import AccountDetailsSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -26,6 +27,9 @@ from dj_rest_auth.utils import jwt_encode
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
 from dj_rest_auth.views import PasswordResetView
+from django.utils import timezone
+from datetime import datetime, timedelta
+
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -81,7 +85,6 @@ class CompanyViewSet(mixins.CreateModelMixin,
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
     lookup_field = 'name'
- # napravi create method svoj
 
     @action(detail=False, methods=['create'])
     def create(self, request, *args, **kwargs):
@@ -238,7 +241,7 @@ class AdminAccountCreateView(generics.CreateAPIView):
 
 class IpAddressView(generics.ListAPIView):
     serializer_class = IPAddressFullSerializer
-
+    #permission_classes = [IsAuthenticated]
     def get_queryset(self):
         # Get the logged in user
         user = self.request.user
@@ -247,3 +250,34 @@ class IpAddressView(generics.ListAPIView):
             return IPAddress.objects.all()
         # Otherwise, return only the objects that belong to the user
         return IPAddress.objects.filter(account=user)
+
+class TaskView(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+    queryset = Task.objects.all()
+
+    def create(self, request):
+        if request.method == 'POST':
+
+            data = self.request.data            
+            if 'due_date' not in data or data['due_date'] is None:
+                due_date = timezone.make_aware(datetime.now() + timedelta(days=1))
+                due_date_str = due_date.strftime("%Y-%m-%d %H:%M:%S")
+                data['due_date'] = due_date_str
+                
+            print(TaskSerializer(data=data)) 
+            serializer = TaskSerializer(data=data, context={'request': request})
+
+            if serializer.is_valid():
+                serializer.save()
+                response = {
+                'detail': 'Task created Successfully!',
+                'data': serializer.data
+                }
+                return Response(data=response, status=status.HTTP_201_CREATED)
+            else:
+                errors = {}
+                for field, error in serializer.errors.items():
+                    errors[field] = error[0]
+                return Response({'detail': _('Request not valid'), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'detail': _('Method not allowed')}, status=status.HTTP_405_METHOD_NOT_ALLOWED)

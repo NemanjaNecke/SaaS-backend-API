@@ -16,6 +16,9 @@ from django.utils.encoding import force_str
 from allauth.account.forms import default_token_generator
 from django.utils.http import urlsafe_base64_decode as uid_decoder
 from django.contrib.auth.forms import PasswordResetForm
+from .models import Task
+from rest_framework import status
+
 
 
 class IPAddressSerializer(serializers.Serializer):
@@ -59,7 +62,6 @@ class AccountRegisterSerializer(RegisterSerializer):
         ip_address = {"ip_address": get_client_ip(request)[0]}
         IPAddress.objects.create(account=user, **ip_address)
 
-        # print(user.ip_address)
         return user
 
 
@@ -197,3 +199,34 @@ class IPAddressFullSerializer(serializers.ModelSerializer):
     class Meta:
         model = IPAddress
         fields = ['id', 'ip_address', 'verified', 'account']
+
+class TaskSerializer(serializers.ModelSerializer):
+    company = serializers.StringRelatedField(read_only=True, required=False)
+    created_by = serializers.StringRelatedField(read_only=True, required=False)
+    class Meta:
+        model = Task
+        fields = '__all__'
+
+    def create(self, validated_data):
+        request = self.context['request']
+        account = request.user
+
+        # Remove the company and created_by fields from the validated data
+        # so that they are not included in the task creation
+        validated_data.pop('company', None)
+        validated_data.pop('created_by', None)
+        
+        # Set the company and created_by fields to the appropriate values
+        try:
+            company = Company.objects.get(accounts=account)
+        except Company.DoesNotExist:
+            try:
+                company = Company.objects.get(admin=account)
+            except Company.DoesNotExist:
+                company = None
+        validated_data['company'] = company
+        validated_data['created_by'] = account
+        
+        # Create and return the task
+        task = Task.objects.create(**validated_data)
+        return task

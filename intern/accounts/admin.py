@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Account, IPAddress, Company, Invitation
+from .models import Account, IPAddress, Company, Invitation, Task
 
 from django import forms
 from django.contrib.auth.forms import PasswordChangeForm
@@ -59,19 +59,19 @@ class UserAdmin(BaseUserAdmin):
     # The fields to be used in displaying the User model.
     # These override the definitions on the base UserAdmin
     # that reference specific fields on auth.User.
-    list_display = ('email', 'first_name', 'last_name', 'is_staff', 'company','is_companyadmin', 'is_superadmin' )
+    list_display = ('email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_companyadmin', 'is_superadmin', 'company', 'date_joined', 'last_login')
     list_filter = ('email',)
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name',)}),
-        ('Permissions', {'fields': ('is_companyadmin', 'is_superadmin')}),
+        ('Permissions', {'fields': ('is_companyadmin', 'is_superadmin', 'is_staff')}),
     )
     # add_fieldsets is not a standard ModelAdmin attribute. UserAdmin
     # overrides get_fieldsets to use this attribute when creating a user.
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'first_name', 'last_name', 'password1', 'password2','is_companyadmin', 'is_superadmin'),
+            'fields': ('email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_companyadmin', 'is_superadmin', 'company', 'date_joined', 'last_login'),
         }),
     )
     search_fields = ('email',)
@@ -96,3 +96,7 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(Invitation)
 class InviteAdmin(admin.ModelAdmin):
     list_display = ['email', 'accepted', 'invited_by', 'used']
+
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ('company', 'description', 'due_date', 'status', 'value', 'currency', 'responsible_user', 'created_by')
