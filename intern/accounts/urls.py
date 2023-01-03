@@ -1,13 +1,14 @@
 from django.urls import path, include
 from rest_framework import routers
 from dj_rest_auth.registration.views import VerifyEmailView, ConfirmEmailView
-from .views import AdminAccountCreateView, AdminAccountView, CustomPasswordResetView, IpAddressView, ResendEmailVerificationView, UserAccountView, activate, CompanyViewSet, InvitationViewSet, InviteOnlyRegistrationView
+from .views import AdminAccountCreateView, AdminAccountView, CustomPasswordResetView, IpAddressView, ResendEmailVerificationView, TaskView, UserAccountView, activate, CompanyViewSet, InvitationViewSet, InviteOnlyRegistrationView
 from dj_rest_auth.views import PasswordResetConfirmView
 
 
 
 router = routers.DefaultRouter()
 router.register(r'invites', InvitationViewSet)
+router.register(r'tasks', TaskView, basename='tasks')
 
 urlpatterns = [
     path(r'auth/ip-address', IpAddressView.as_view(), name='ip-address'),

@@ -1,6 +1,6 @@
 from django.forms import ValidationError
 from django.shortcuts import redirect, get_object_or_404
-from rest_framework import viewsets, generics, mixins, renderers
+from rest_framework import viewsets, generics, mixins, renderers, filters
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -12,10 +12,13 @@ from django.utils.translation import gettext_lazy as _
 from accounts.models import IPAddress, Account, Company, Invitation, Task
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
+
+
+from .filters import TaskFilter
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from accounts.serializers import AccountDetailsSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
+from accounts.serializers import AccountDetailsSerializer,UserTaskSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -29,6 +32,9 @@ from django.db import IntegrityError
 from dj_rest_auth.views import PasswordResetView
 from django.utils import timezone
 from datetime import datetime, timedelta
+from django.db.models import Q
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Count, Sum
 
 
 class ResendEmailVerificationView(generics.CreateAPIView):
@@ -46,11 +52,12 @@ class ResendEmailVerificationView(generics.CreateAPIView):
             if not email.verified:
                 email.send_confirmation(request)
             else:
-                return Response({_('Email already verified')}, 
-                status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response({_('Email already verified')},
+                                status=status.HTTP_503_SERVICE_UNAVAILABLE)
         else:
             return Response({_('Email not found')}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': _('ok')}, status=status.HTTP_200_OK)
+
 
 class CustomPasswordResetView(PasswordResetView):
     serializer_class = PasswordResetSerializer
@@ -67,7 +74,7 @@ def activate(request, uidb64, token):
             account=account, **ip_address)
     except IntegrityError:
         return Response({_('Activation link already used')}, status=status.HTTP_404_NOT_FOUND)
-    
+
     if account_activation_token.check_token(uid[0], token):
 
         return Response({'detail': _('IP address verified successfully')}, status=status.HTTP_200_OK)
@@ -77,10 +84,11 @@ def activate(request, uidb64, token):
     return redirect('homepage')
     return redirect('/login')
 
+
 class CompanyViewSet(mixins.CreateModelMixin,
-                    mixins.ListModelMixin,
-                    mixins.RetrieveModelMixin,
-                    viewsets.GenericViewSet):
+                     mixins.ListModelMixin,
+                     mixins.RetrieveModelMixin,
+                     viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
@@ -94,33 +102,37 @@ class CompanyViewSet(mixins.CreateModelMixin,
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['put'], permission_classes=[IsSuperAdmin])
-    #dodaj permissions za super admin i handler ako nije
+    # dodaj permissions za super admin i handler ako nije
     def deactivate_company(self, request, pk=None, name=None):
 
-        account = request.user    
-        company  = get_object_or_404(self.queryset)
+        account = request.user
+        company = get_object_or_404(self.queryset)
         serializer = CompanySerializer(company)
 
         company.deactivate(account)
         company.save()
         return Response(serializer.data)
+
     @action(detail=True, methods=['put'], permission_classes=[IsSuperAdmin])
     def activate_company(self, request, pk=None, name=None):
-        
-        account = request.user    
-        company  = get_object_or_404(self.queryset)
+
+        account = request.user
+        company = get_object_or_404(self.queryset)
         serializer = CompanySerializer(company)
 
         company.activate(account)
         company.save()
         return Response(serializer.data)
 
+
 class InvitationViewSet(viewsets.ModelViewSet):
     serializer_class = InvitationSerializer
     queryset = Invitation.objects.all()
     permission_classes = [IsSuperAdmin or IsCompanyAdmin]
+
     def create(self, request):
-        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer = self.get_serializer(
+            data=request.data, context={'request': request})
         try:
             serializer.is_valid(raise_exception=True)
             invitation = Invitation(**serializer.validated_data)
@@ -128,17 +140,18 @@ class InvitationViewSet(viewsets.ModelViewSet):
             response_data = serializer.data
         except ValidationError as e:
             return Response({'error': e.detail}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         response_data.update({'detail': _('Invite sent successfully')})
         return Response(response_data, status=status.HTTP_201_CREATED)
 
-class InviteOnlyRegistrationView(RegisterView):    
+
+class InviteOnlyRegistrationView(RegisterView):
     '''
     First, check if the user has accessed the view with a valid invitation link
     This would involve checking the "uid" and "token" parameters in the URL,
     and verifying that they match a valid invitation in the database
     '''
-    
+
     def is_valid_invitation_link(self, request, uid, token):
         uid = force_str(urlsafe_base64_decode(uid)).split('/')
         email = uid[0]
@@ -149,9 +162,8 @@ class InviteOnlyRegistrationView(RegisterView):
         '''
         invitation = Invitation.objects.filter(email=email).first()
         '''Check if token is valid for given user and if the invite exists'''
-        if invitation is None or invitation.used ==True or not registration_activation_token.check_token(email, token):
-            
-            
+        if invitation is None or invitation.used == True or not registration_activation_token.check_token(email, token):
+
             return False
         if invitation:
             invitation.accept()
@@ -167,7 +179,8 @@ class InviteOnlyRegistrationView(RegisterView):
             '''
             If the invitation link is not valid, return JSON that link is not valid
             '''
-            response = Response({_('Activation link not valid')}, status=status.HTTP_404_NOT_FOUND)
+            response = Response({_('Activation link not valid')},
+                                status=status.HTTP_404_NOT_FOUND)
             response.accepted_renderer = renderers.JSONRenderer()
             response.accepted_media_type = "application/json"
             response.renderer_context = {'request': request}
@@ -200,18 +213,22 @@ class InviteOnlyRegistrationView(RegisterView):
         invitation.save()
         return user
 
+
 class AdminAccountView(generics.ListAPIView):
     serializer_class = AccountsSerializer
     permission_classes = [IsSuperAdmin]
+
     def get_queryset(self):
         return Account.objects.filter(is_companyadmin=True)
-      
+
+
 class UserAccountView(generics.RetrieveAPIView):
     serializer_class = AccountDetailsSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_object(self):
         return self.request.user
+
 
 class AdminAccountCreateView(generics.CreateAPIView):
     serializer_class = AccountsSerializer
@@ -230,11 +247,13 @@ class AdminAccountCreateView(generics.CreateAPIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         else:
             return Response({'password': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+
     def perform_create(self, serializer):
         password = self.request.data.get('password1')
 
         if password:
-            serializer.save(is_companyadmin=True, is_staff=True, password=make_password(password))
+            serializer.save(is_companyadmin=True, is_staff=True,
+                            password=make_password(password))
         else:
             raise ValidationError({'password': 'Passwords do not match'})
 
@@ -242,6 +261,7 @@ class AdminAccountCreateView(generics.CreateAPIView):
 class IpAddressView(generics.ListAPIView):
     serializer_class = IPAddressFullSerializer
     #permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         # Get the logged in user
         user = self.request.user
@@ -251,28 +271,32 @@ class IpAddressView(generics.ListAPIView):
         # Otherwise, return only the objects that belong to the user
         return IPAddress.objects.filter(account=user)
 
+
 class TaskView(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
+    ordering_fields = ('due_date', 'priority', 'created_by')
+    filterset_class = TaskFilter
+    search_fields = ['company', 'responsible_user__email', 'created_by__email']
 
     def create(self, request):
         if request.method == 'POST':
 
-            data = self.request.data            
+            data = self.request.data
             if 'due_date' not in data or data['due_date'] is None:
-                due_date = timezone.make_aware(datetime.now() + timedelta(days=1))
+                due_date = timezone.make_aware(
+                    datetime.now() + timedelta(days=1))
                 due_date_str = due_date.strftime("%Y-%m-%d %H:%M:%S")
                 data['due_date'] = due_date_str
-                
-            print(TaskSerializer(data=data)) 
-            serializer = TaskSerializer(data=data, context={'request': request})
-
+            serializer = TaskSerializer(
+                data=data, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
                 response = {
-                'detail': 'Task created Successfully!',
-                'data': serializer.data
+                    'detail': 'Task created Successfully!',
+                    'data': serializer.data
                 }
+
                 return Response(data=response, status=status.HTTP_201_CREATED)
             else:
                 errors = {}
@@ -281,3 +305,87 @@ class TaskView(viewsets.ModelViewSet):
                 return Response({'detail': _('Request not valid'), 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'detail': _('Method not allowed')}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def list(self, request):
+ 
+        # Get the filtered queryset using the filter set
+        queryset = self.filter_queryset(self.get_queryset())
+        # Get analytics
+        analytics = self.get_analytics(request, queryset)
+       # Pagination
+        page = self.paginate_queryset(queryset)
+        # if page is not None:
+        #     serializer = TaskSerializer(page, many=True)
+        #     return 
+        # Get serializer
+        serializer = self.get_serializer(queryset, many=True)
+        # Check if the user is a superadmin or a companyadmin
+        if request.user.is_superuser or request.user.is_companyadmin:
+            # If the user is a superadmin or a companyadmin, show the analytics
+
+            # Return the analytics data in the response
+            return self.get_paginated_response({
+            'analytics':analytics,
+            'data': serializer.data,
+        })
+
+        else:
+            # If the user is not a superadmin or a companyadmin, show only the response data
+            serializer = UserTaskSerializer(queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+    def get_analytics(self, request, queryset):
+        # Initialize the analytics data
+        analytics = {
+            'total_tasks': 0,
+            'total_value': 0,
+            'total_completed':0,
+            'total_open': 0,
+            'tasks_per_category': []
+        }
+
+    # Get the total number of tasks
+        analytics['total_tasks'] = queryset.count()
+
+    # Get the total value of all tasks
+        analytics['total_value'] = queryset.aggregate(Sum('value'))[
+            'value__sum']
+    # Get the total number of closed tasks
+        analytics['total_completed'] = queryset.filter(status='completed').count()
+    # Get the total number of closed tasks
+        analytics['total_open'] = queryset.filter(status='open').count()
+    # Get the number of tasks per category
+        tasks_per_category = queryset.values('category').annotate(
+            count=Count('id')).order_by('category')
+        for task in tasks_per_category:
+            analytics['tasks_per_category'].append({
+                'category': task['category'],
+                'count': task['count']
+            })
+
+        return analytics
+
+    def get_queryset(self):
+        request = self.request
+        account = request.user
+
+        try:
+            company_admin = Company.objects.get(admin=account)
+        except Company.DoesNotExist:
+            company_admin = None
+
+        queryset = self.queryset
+
+    # Check if the user is a superadmin or a company admin
+        if account.is_superuser:
+            queryset
+        # Return the full queryset, filtered by the company if the user is a company admin
+        elif company_admin:
+            queryset = queryset.filter(company=company_admin)
+
+        else:
+            # Return only the tasks that are made by or assigned to the user
+            queryset = queryset.filter(
+                Q(created_by=account) | Q(responsible_user=account))
+
+        return queryset

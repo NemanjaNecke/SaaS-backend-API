@@ -203,6 +203,7 @@ class IPAddressFullSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     company = serializers.StringRelatedField(read_only=True, required=False)
     created_by = serializers.StringRelatedField(read_only=True, required=False)
+    
     class Meta:
         model = Task
         fields = '__all__'
@@ -211,12 +212,9 @@ class TaskSerializer(serializers.ModelSerializer):
         request = self.context['request']
         account = request.user
 
-        # Remove the company and created_by fields from the validated data
-        # so that they are not included in the task creation
         validated_data.pop('company', None)
         validated_data.pop('created_by', None)
         
-        # Set the company and created_by fields to the appropriate values
         try:
             company = Company.objects.get(accounts=account)
         except Company.DoesNotExist:
@@ -226,7 +224,20 @@ class TaskSerializer(serializers.ModelSerializer):
                 company = None
         validated_data['company'] = company
         validated_data['created_by'] = account
-        
+        # Check if user is from the company
+        print(validated_data["responsible_user"] in company.accounts.all())
+        if validated_data["responsible_user"] in company.accounts.all():
+
         # Create and return the task
-        task = Task.objects.create(**validated_data)
-        return task
+            task = Task.objects.create(**validated_data)
+            return task
+        else:
+            raise ValidationError("The account that this task is created for doesn't belong to your company")
+
+class UserTaskSerializer(serializers.ModelSerializer):
+    company = serializers.StringRelatedField(read_only=True, required=False)
+    created_by = serializers.StringRelatedField(read_only=True, required=False)
+    
+    class Meta:
+        model = Task
+        exclude = ['currency', 'value']
