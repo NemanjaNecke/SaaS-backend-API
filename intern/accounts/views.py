@@ -12,13 +12,12 @@ from django.utils.translation import gettext_lazy as _
 from accounts.models import IPAddress, Account, Company, Invitation, Task
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-
-
+from rest_framework.pagination import PageNumberPagination
 from .filters import TaskFilter
 from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
-from accounts.serializers import AccountDetailsSerializer,UserTaskSerializer, AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
+from accounts.serializers import AccountListSerializer, ResponseTaskSeriliazer, AccountDetailsSerializer, InviteListSerializer, UserTaskSerializer, CompanyListSerializer,AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
 from .permissions import IsCompanyAdmin, IsSuperAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
@@ -93,6 +92,7 @@ class CompanyViewSet(mixins.CreateModelMixin,
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
     lookup_field = 'name'
+    
 
     @action(detail=False, methods=['create'])
     def create(self, request, *args, **kwargs):
@@ -100,6 +100,21 @@ class CompanyViewSet(mixins.CreateModelMixin,
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def list(self, request):
+  # Get the filtered queryset using the filter set
+        queryset = self.filter_queryset(self.get_queryset())
+
+    # If the user is a superuser or a company admin, return all companies
+        if request.user.is_superuser:
+            serializer = CompanyListSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+    # Otherwise, return only the company that the user is an admin of
+        else:
+            company = queryset.get(admin=request.user)
+            serializer = CompanyListSerializer(company)
+            return Response(serializer.data)
 
     @action(detail=True, methods=['put'], permission_classes=[IsSuperAdmin])
     # dodaj permissions za super admin i handler ako nije
@@ -144,6 +159,9 @@ class InvitationViewSet(viewsets.ModelViewSet):
         response_data.update({'detail': _('Invite sent successfully')})
         return Response(response_data, status=status.HTTP_201_CREATED)
 
+    def list(self, request):
+        serializer = InviteListSerializer(self.queryset, many=True)
+        return Response(serializer.data)
 
 class InviteOnlyRegistrationView(RegisterView):
     '''
@@ -228,7 +246,22 @@ class UserAccountView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+        
+class UserAccounts(generics.ListAPIView):
+    serializer_class = AccountListSerializer
+    queryset = Account.objects.all()
+    def get_queryset(self):
+        user = self.request.user
+        # If the user is a superuser, return the full queryset
+        if user.is_superadmin:
+            return Account.objects.all()
+        # Otherwise, return only the objects that belong to user's or admin's company
+        return Account.objects.filter(company=user.company)
 
+class AdminAccountUpdateView(generics.RetrieveUpdateAPIView):
+    serializer_class = AccountDetailsSerializer
+    permission_classes = [IsSuperAdmin]
+    queryset = Account.objects.all()
 
 class AdminAccountCreateView(generics.CreateAPIView):
     serializer_class = AccountsSerializer
@@ -261,7 +294,7 @@ class AdminAccountCreateView(generics.CreateAPIView):
 class IpAddressView(generics.ListAPIView):
     serializer_class = IPAddressFullSerializer
     #permission_classes = [IsAuthenticated]
-
+    ordering_fields = ('account', 'ip_address')
     def get_queryset(self):
         # Get the logged in user
         user = self.request.user
@@ -273,6 +306,8 @@ class IpAddressView(generics.ListAPIView):
 
 
 class TaskView(viewsets.ModelViewSet):
+    pagination_class = PageNumberPagination
+    pagination_class.page_size = 10
     serializer_class = TaskSerializer
     queryset = Task.objects.all()
     ordering_fields = ('due_date', 'priority', 'created_by')
@@ -318,7 +353,7 @@ class TaskView(viewsets.ModelViewSet):
         #     serializer = TaskSerializer(page, many=True)
         #     return 
         # Get serializer
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = ResponseTaskSeriliazer(queryset, many=True)
         # Check if the user is a superadmin or a companyadmin
         if request.user.is_superuser or request.user.is_companyadmin:
             # If the user is a superadmin or a companyadmin, show the analytics
@@ -332,28 +367,58 @@ class TaskView(viewsets.ModelViewSet):
         else:
             # If the user is not a superadmin or a companyadmin, show only the response data
             serializer = UserTaskSerializer(queryset, many=True)
-            return self.get_paginated_response(serializer.data)
+            return self.get_paginated_response({'data':serializer.data})
 
     def get_analytics(self, request, queryset):
         # Initialize the analytics data
         analytics = {
             'total_tasks': 0,
-            'total_value': 0,
-            'total_completed':0,
-            'total_open': 0,
-            'tasks_per_category': []
+            'tasks_value_per_priority': [],
+            'task_per_status':[],
+            'total_value': 0, 
+            'tasks_per_category': [],
+            'task_value_per_category': [],
+            'task_value_per_status': [],
+            'tasks_per_status_and_category': []
         }
 
     # Get the total number of tasks
         analytics['total_tasks'] = queryset.count()
-
+    # Get the task per status number
+        task_per_status = queryset.values('status').annotate(
+            count=Count('id')).order_by('status')
+        for task in task_per_status:
+            analytics['task_per_status'].append({
+                'status': task['status'],
+                'count': task['count']
+            })
     # Get the total value of all tasks
         analytics['total_value'] = queryset.aggregate(Sum('value'))[
             'value__sum']
-    # Get the total number of closed tasks
-        analytics['total_completed'] = queryset.filter(status='completed').count()
-    # Get the total number of closed tasks
-        analytics['total_open'] = queryset.filter(status='open').count()
+    # Get the value of tasks per priority
+        tasks_value_per_priority = queryset.values('priority').annotate(
+            sum=Sum('value')).order_by('priority')
+        for task in tasks_value_per_priority:
+            analytics['tasks_value_per_priority'].append({
+                'priority': task['priority'],
+                'value': task['sum']
+            })
+    # Get the value of each task per category
+        task_value_per_category = queryset.values('category').annotate(
+            sum=Sum('value')).order_by('category')
+        for task in task_value_per_category:
+            analytics['task_value_per_category'].append({
+                'category': task['category'],
+                'value': task['sum']
+            })
+        # Calculate the value of each task per status
+        task_value_per_status = queryset.values('status').annotate(
+            sum=Sum('value')).order_by('status')
+        for task in task_value_per_status:
+            analytics['task_value_per_status'].append({
+            'status': task['status'],
+            'value': task['sum']
+            })
     # Get the number of tasks per category
         tasks_per_category = queryset.values('category').annotate(
             count=Count('id')).order_by('category')
@@ -362,6 +427,17 @@ class TaskView(viewsets.ModelViewSet):
                 'category': task['category'],
                 'count': task['count']
             })
+    # Get the value of task per category and status
+        tasks_per_status_and_category = queryset.values('status', 'category').annotate(
+        value=Sum('value')).order_by('status', 'category')
+
+        analytics['tasks_per_status_and_category'] = []
+        for task in tasks_per_status_and_category:
+            analytics['tasks_per_status_and_category'].append({
+            'status': task['status'],
+            'category': task['category'],
+            'value': task['value']
+        })
 
         return analytics
 

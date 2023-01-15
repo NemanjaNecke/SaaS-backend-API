@@ -113,6 +113,13 @@ class CompanySerializer(serializers.ModelSerializer):
             'url': {'lookup_field': 'name'}
         }
 
+class CompanyListSerializer(serializers.ModelSerializer):
+    admin = serializers.StringRelatedField()
+    accounts = serializers.StringRelatedField(many=True)
+    class Meta:
+        model = Company
+        fields = ['id','name', 'admin', 'active_until', 'is_active', 'accounts']
+
 class AccountDetailsSerializer(serializers.ModelSerializer):
     ip_address = serializers.StringRelatedField(many=True)
     company = serializers.SlugRelatedField(
@@ -123,6 +130,16 @@ class AccountDetailsSerializer(serializers.ModelSerializer):
         model = Account
         fields = ['id','email', 'first_name', 'last_name', 'ip_address', 'company']
         read_only_fields = ('pk', 'email', 'ip_address')
+
+class AccountListSerializer(serializers.ModelSerializer):
+    company = serializers.SlugRelatedField(
+        slug_field='name',
+        queryset=Company.objects.all()
+    )
+    class Meta:
+        model = Account
+        fields = ['id','email', 'first_name', 'last_name', 'company']
+        read_only_fields = ('pk', 'email', 'ip_address')        
 
 class PasswordResetSerializer(PasswordResetSerializer):
     @property
@@ -184,13 +201,16 @@ class InvitationSerializer(serializers.ModelSerializer):
         send_registration_invite(request, instance.email, company, instance.invited_by)
         return instance
 
+class InviteListSerializer(serializers.ModelSerializer):
+    invited_by = serializers.StringRelatedField()
+    class Meta:
+        model = Invitation
+        fields = ['email', 'invited_by', 'accepted', 'used', 'id']
+
 class AccountsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
-        fields = ['id',
-            "email",
-            "first_name",
-            "last_name",]
+        fields = ['id', "email","first_name","last_name",]
 
         
 class IPAddressFullSerializer(serializers.ModelSerializer):
@@ -214,19 +234,23 @@ class TaskSerializer(serializers.ModelSerializer):
 
         validated_data.pop('company', None)
         validated_data.pop('created_by', None)
-        
+        responsible_user = validated_data["responsible_user"]
         try:
             company = Company.objects.get(accounts=account)
         except Company.DoesNotExist:
             try:
                 company = Company.objects.get(admin=account)
             except Company.DoesNotExist:
-                company = None
+                company = Company.objects.get(accounts=responsible_user)
         validated_data['company'] = company
         validated_data['created_by'] = account
-        # Check if user is from the company
-        print(validated_data["responsible_user"] in company.accounts.all())
-        if validated_data["responsible_user"] in company.accounts.all():
+        # Check if the super_admin is making a request
+        if account.is_superadmin:
+
+            task = Task.objects.create(**validated_data)
+            return task
+        # Check if user is from the same company
+        elif validated_data["responsible_user"] in company.accounts.all():
 
         # Create and return the task
             task = Task.objects.create(**validated_data)
@@ -234,10 +258,19 @@ class TaskSerializer(serializers.ModelSerializer):
         else:
             raise ValidationError("The account that this task is created for doesn't belong to your company")
 
+class ResponseTaskSeriliazer(serializers.ModelSerializer):
+    company = serializers.StringRelatedField(read_only=True, required=False)
+    created_by = serializers.StringRelatedField(read_only=True, required=False)
+    responsible_user = serializers.StringRelatedField(read_only=True)
+    class Meta:
+        model = Task
+        fields = '__all__'
+
 class UserTaskSerializer(serializers.ModelSerializer):
     company = serializers.StringRelatedField(read_only=True, required=False)
     created_by = serializers.StringRelatedField(read_only=True, required=False)
-    
+    responsible_user = serializers.StringRelatedField(read_only=True)
     class Meta:
         model = Task
         exclude = ['currency', 'value']
+
