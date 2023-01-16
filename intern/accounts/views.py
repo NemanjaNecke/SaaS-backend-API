@@ -18,7 +18,7 @@ from .adapter import account_activation_token, registration_activation_token
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
 from accounts.serializers import AccountListSerializer, ResponseTaskSeriliazer, AccountDetailsSerializer, InviteListSerializer, UserTaskSerializer, CompanyListSerializer,AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
-from .permissions import IsCompanyAdmin, IsSuperAdmin
+from .permissions import IsCompanyAdmin, IsSuperAdmin, IsSuperAdminOrCompanyAdmin
 from dj_rest_auth.registration.views import RegisterView
 from django.views.generic import TemplateView
 from allauth.account.utils import complete_signup
@@ -143,7 +143,28 @@ class CompanyViewSet(mixins.CreateModelMixin,
 class InvitationViewSet(viewsets.ModelViewSet):
     serializer_class = InvitationSerializer
     queryset = Invitation.objects.all()
-    permission_classes = [IsSuperAdmin or IsCompanyAdmin]
+    permission_classes = [IsSuperAdminOrCompanyAdmin]
+
+    def get_queryset(self):
+        request = self.request
+        account = request.user
+
+        try:
+            company_admin = Company.objects.get(admin=account)
+
+        except Company.DoesNotExist:
+            company_admin = None
+
+        queryset = self.queryset
+
+    # Check if the user is a superadmin or a company admin
+        if account.is_superuser:
+            queryset
+        # Return the full queryset, filtered by the company if the user is a company admin
+        elif company_admin:
+            queryset = queryset.filter(Q(invited_by=account))
+        
+        return queryset
 
     def create(self, request):
         serializer = self.get_serializer(
@@ -160,7 +181,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     def list(self, request):
-        serializer = InviteListSerializer(self.queryset, many=True)
+        serializer = InviteListSerializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
 class InviteOnlyRegistrationView(RegisterView):
@@ -360,7 +381,7 @@ class TaskView(viewsets.ModelViewSet):
 
             # Return the analytics data in the response
             return self.get_paginated_response({
-            'analytics':analytics,
+           # 'analytics':analytics,
             'data': serializer.data,
         })
 
@@ -465,3 +486,9 @@ class TaskView(viewsets.ModelViewSet):
                 Q(created_by=account) | Q(responsible_user=account))
 
         return queryset
+
+class TaskAnalyticsView(TaskView):
+    def list(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        analytics = self.get_analytics(request, queryset)
+        return Response({'analytics': analytics})
