@@ -18,8 +18,8 @@ from django.utils.http import urlsafe_base64_decode as uid_decoder
 from django.contrib.auth.forms import PasswordResetForm
 from .models import Task
 from rest_framework import status
-
-
+from allauth.account.models import EmailAddress
+from django.utils.translation import gettext_lazy as _
 
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
@@ -68,8 +68,18 @@ class AccountRegisterSerializer(RegisterSerializer):
 class AccountLoginSerializer(LoginSerializer):
     username = None
 
-    def authenticate(self, **options):
+    def authenticate(self,**options):
         return authenticate(self.context["request"], **options)
+    @staticmethod
+    def validate_email_verification_status(request,user):
+        email = EmailAddress.objects.filter(email=user.email).first()
+        from allauth.account import app_settings
+        if (
+            app_settings.EMAIL_VERIFICATION == app_settings.EmailVerificationMethod.MANDATORY
+            and not email.verified
+        ):
+            email.send_confirmation(request)
+            raise serializers.ValidationError(_('E-mail is not verified.'))
 
     def validate(self, attrs):
         email = attrs.get("email")
@@ -97,7 +107,7 @@ class AccountLoginSerializer(LoginSerializer):
         else:
             msg = "No email provided."
             raise exceptions.ValidationError(msg)
-        self.validate_email_verification_status(user)
+        self.validate_email_verification_status(self.context["request"],user)
 
         attrs["user"] = user
 
