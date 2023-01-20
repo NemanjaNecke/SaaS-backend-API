@@ -1,4 +1,4 @@
-Hello {{user}}
-You're receiving this e-mail because your IP address doesn't match IP address provided on sign up.
+Hello {{user.first_name}} {{user.last_name}},
+<p>You're receiving this e-mail because your IP address doesn't match IP address provided on sign up.</p>
 
-To confirm this is you, go to http://{{domain}}{% url 'activate-ip' uidb64=uid token=token %}
+<p>To confirm this is you, go to this <a href="http://{{domain}}{% url 'activate-ip' uidb64=uid token=token %}">link</a></p>

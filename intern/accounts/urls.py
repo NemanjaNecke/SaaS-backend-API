@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from dj_rest_auth.registration.views import VerifyEmailView, ConfirmEmailView
-from .views import AdminAccountCreateView, AdminAccountUpdateView, AdminAccountView, CustomPasswordResetView, IpAddressView, ResendEmailVerificationView, TaskAnalyticsView, TaskView, UserAccountView, UserAccounts, activate, CompanyViewSet, InvitationViewSet, InviteOnlyRegistrationView
+from .views import AdminAccountCreateView, AdminAccountUpdateView, AdminAccountView, CustomPasswordResetView, IpAddressView, ResendEmailVerificationView, TaskAnalyticsView, TaskView, UserAccountView, UserAccounts, activate, CompanyViewSet, InvitationViewSet, InviteOnlyRegistrationView, notification_count, notification
 from dj_rest_auth.views import PasswordResetConfirmView
 
 
@@ -11,6 +11,8 @@ router.register(r'invites', InvitationViewSet, basename='invites')
 router.register(r'tasks', TaskView, basename='tasks')
 
 urlpatterns = [
+    path(r'tasks/notification_email', notification, name='notification_email'),
+     path(r'tasks/notification_count/', notification_count, name='notification_count'),
     path(r'tasks/analytics', TaskAnalyticsView.as_view({'get': 'list'}), name='task-analytics'),
     path(r'auth/ip-address', IpAddressView.as_view(), name='ip-address'),
     path(r'auth/register/admin/', AdminAccountCreateView.as_view(), name='create-company-admin'),

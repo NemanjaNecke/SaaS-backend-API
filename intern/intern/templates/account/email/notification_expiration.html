@@ -1,0 +1,7 @@
+{% extends "account/email/base_message.txt" %}
+{% block content %}
+  <p>Hello {{ task.responsible_user.first_name }} {{ task.responsible_user.last_name }},</p>
+  <p>This is a reminder that the task <strong>{{ task.id }}</strong> assigned to company <strong>{{ task.company.name }}</strong>  is about to expire.</p>
+  <p>Please take the necessary actions to complete the task before the notification date expires.</p>
+  <p>Thank you.</p>
+{% endblock %}

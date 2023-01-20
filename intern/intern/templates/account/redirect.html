@@ -1,0 +1,38 @@
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+{% if show_message %}
+    {% if messages %}
+        <div class="messages d-flex justify-content-center" id="message">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}"><h1>{{ message }}</h1>
+            <p>Redirecting to login...</p>
+            </div>
+            
+        {% endfor %}
+        </div>
+    {% endif %}
+
+<script>
+    function getCookie(cname) {
+        var name = cname + "=";
+        var decodedCookie = decodeURIComponent(document.cookie);
+        var ca = decodedCookie.split(';');
+        for(var i = 0; i <ca.length; i++) {
+            var c = ca[i];
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
+            }
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+        return "";
+    }
+    var showMessage = getCookie("show_message");
+    if (showMessage) {
+        document.getElementById("message").style.display = "block";
+    }
+    setTimeout(function(){
+        window.location.href = 'https://admin-intern.firebaseapp.com/login';
+    }, 5000);
+</script>
+{% endif %}

@@ -14,7 +14,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from rest_framework.pagination import PageNumberPagination
 from .filters import TaskFilter
-from .adapter import account_activation_token, registration_activation_token
+from .adapter import account_activation_token, registration_activation_token, send_notification_expiration_email
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
 from accounts.serializers import AccountListSerializer, ResponseTaskSeriliazer, AccountDetailsSerializer, InviteListSerializer, UserTaskSerializer, CompanyListSerializer,AccountsSerializer, CompanySerializer, IPAddressFullSerializer, InvitationSerializer, PasswordResetSerializer, TaskSerializer
@@ -33,8 +33,10 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Sum
-
+from django.db.models import Count, Sum,  F
+from django.contrib import messages
+from django.shortcuts import render
+from django.db.models.functions import TruncMonth
 
 class ResendEmailVerificationView(generics.CreateAPIView):
     permission_classes = (AllowAny,)
@@ -72,16 +74,22 @@ def activate(request, uidb64, token):
         ip_address = IPAddress.objects.create(
             account=account, **ip_address)
     except IntegrityError:
-        return Response({_('Activation link already used')}, status=status.HTTP_404_NOT_FOUND)
+        messages.warning(request, 'Activation link already used')
+        response = render(request, 'account/redirect.html', {'show_message': True, 'messages': messages.get_messages(request)})
+        response.set_cookie('show_message', 'True')
+        return response
 
     if account_activation_token.check_token(uid[0], token):
 
-        return Response({'detail': _('IP address verified successfully')}, status=status.HTTP_200_OK)
+        messages.success(request, 'IP address verified succesfully')
+        response = render(request, 'account/redirect.html', {'show_message': True, 'messages': messages.get_messages(request)})
+        response.set_cookie('show_message', 'True')
+        return response
     else:
-        return Response({_('Activation link not valid')}, status=status.HTTP_404_NOT_FOUND)
-
-    return redirect('homepage')
-    return redirect('/login')
+        messages.error(request, 'Activation link not valid, please try to login again to receive a new email')
+        response = render(request, 'account/redirect.html', {'show_message': True, 'messages': messages.get_messages(request)})
+        response.set_cookie('show_message', 'True')
+        return response
 
 
 class CompanyViewSet(mixins.CreateModelMixin,
@@ -400,7 +408,10 @@ class TaskView(viewsets.ModelViewSet):
             'tasks_per_category': [],
             'task_value_per_category': [],
             'task_value_per_status': [],
-            'tasks_per_status_and_category': []
+            'tasks_per_status_and_category': [],
+            'task_count_per_month': [],
+            'task_per_priority': [],
+            'monthdata': []
         }
 
     # Get the total number of tasks
@@ -460,6 +471,33 @@ class TaskView(viewsets.ModelViewSet):
             'value': task['value']
         })
 
+    # Get the count of tasks per due_date
+        task_count_per_month = queryset.annotate(month=TruncMonth('due_date')).values('month').annotate(count=Count('id')).order_by('month')
+        for task in task_count_per_month:
+            month = task['month'].strftime("%B %Y")
+            analytics['task_count_per_month'].append({
+                'month': month,
+                'count': task['count']
+            })
+
+        task_per_priority = queryset.values('priority').annotate(count=Count('id')).order_by('priority')
+        for task in task_per_priority:
+            analytics['task_per_priority'].append({
+                'priority': task['priority'],
+                'count': task['count']
+            })
+        
+        task_data_per_month = queryset.annotate(month=TruncMonth('due_date')).values('month').annotate(count=Count('id'), value=Sum('value')).order_by('month')
+        for task in task_data_per_month:
+            month = task['month'].strftime("%B %Y")
+            count = task['count']
+            value = task['value']
+            analytics['monthdata'].append({
+                'month': month,
+                'count': task['count'],
+                'value': task['value'],
+                'average_val': value/count
+            })
         return analytics
 
     def get_queryset(self):
@@ -492,3 +530,14 @@ class TaskAnalyticsView(TaskView):
         queryset = self.filter_queryset(self.get_queryset())
         analytics = self.get_analytics(request, queryset)
         return Response({'analytics': analytics})
+
+@api_view(['GET'])
+def notification_count(request):
+    user = request.user
+    now = timezone.make_aware(datetime.now())
+    count = Task.objects.filter(responsible_user=user, status='open', notification=True, notification_date__gt=now).count()
+    return Response({'count': count})
+
+@api_view(['GET'])
+def notification(request):
+    send_notification_expiration_email(request)
