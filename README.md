@@ -1,6 +1,35 @@
 # internship
 
+## Description
+
+This SaaS application, built using Django and DRF with a SQLite database, offers custom registration managed by an admin user. Users log in using their email and password, with IP checking for added security. If logging in from a different IP, users are sent an email to verify the login. The application has three types of users: superadmins, admins, and regular users. Superadmins can assign admins, create, activate and deactivate companies, while every admin has access to their own company only. Admins can send registration invites and create tasks for users. Users can create tasks for themselves or others, and notifications are sent for unfinished tasks. Analytics for all tasks are also available, and users receive email notifications for new tasks assigned to them. All users have their own profiles with their information that can be changed and the task count.
+
 ## Run
+
+```
+git clone https://github.com/NemanjaNecke/internship
+cd internship
+```
+
+Create a virtual environment to install the project dependencies.
+
+```
+virtualenv venv
+```
+
+Activate the virtual environment using the following command if on windows:
+
+```
+venv/Scripts/activate
+```
+
+Install the project dependencies using `pip`. The dependencies are listed in the `requirements.txt`
+
+```
+pip install -r requirements.txt
+```
+
+Then:
 
 ```
 python manage.py makemigrations
@@ -52,7 +81,7 @@ or
 
 * Default value for active until is 3 months and it doesn't have to be provided in post request
 
-> GET, PUT companies/<name>/
+> GET, PUT companies/`<name>`/
 
 * Detail view for companies uses company name as a parameter in URL
 * Put request deactivates the company
@@ -91,7 +120,7 @@ or
 
 #### Register a user account
 
-> POST auth/register/<uidb64>/<token>
+> POST auth/register/`<uidb64>`/`<token>`
 
 ![1670638348774](image/README/1670638348774.png)
 
@@ -174,3 +203,24 @@ or
 
 * User needs to be logged in to access this endpoint. Only username and personal info is editable.
 * Accepts PUT and PATCH requests
+
+
+* `/tasks/notification_email`: Sends a notification email to the user about their tasks.
+* `/tasks/notification_count/`: Returns the count of notification emails that the user has received.
+* `/tasks/analytics`: Returns the analytics data for tasks.
+* `/auth/ip-address`: Returns the IP address of the user.
+* `/auth/register/admin/`: Creates a new company administrator account.
+* `/auth/accounts/admin/`: Returns a list of all company administrator accounts.
+* `/auth/accounts/admin/<pk>`: Updates the details of a specific company administrator account.
+* `/auth/accounts/account/`: Returns the details of the user's account.
+* `/auth/accounts/all/`: Returns a list of all user accounts.
+* `/invites/`: Lists all pending invitations or creates a new invitation.
+* `/invites/<pk>/`: Retrieves or deletes a specific invitation.
+* `/tasks/`: Lists all tasks or creates a new task.
+* `/tasks/<pk>/`: Retrieves, updates or deletes a specific task.
+* `/auth/password/reset/`: Sends an email to the user with a password reset link.
+* `/auth/password/reset/confirm/<slug:uidb64>/<slug:token>/`: Resets the user's password.
+* `/auth/registration/resend-email/`: Resends the verification email to the user.
+* `/auth/ip-address/activate-ip/<uidb64>/<token>`: Activates the user's IP address.
+* `/auth/`: Provides authentication endpoints for login, logout, and password change.
+* `/auth/account-confirm-email/`: Sends an email to the user to confirm their email address.

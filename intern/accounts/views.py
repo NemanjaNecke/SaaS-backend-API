@@ -180,6 +180,13 @@ class InvitationViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
             invitation = Invitation(**serializer.validated_data)
+            invited_by = invitation.invited_by
+
+            # Set the default admin as the invited_by user if the field is None
+            if invited_by is None:
+                admin = Account.objects.get(is_superuser=True)
+                invitation.invited_by = admin
+
             invitation = serializer.save(invitation, request)
             response_data = serializer.data
         except ValidationError as e:
@@ -187,7 +194,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
 
         response_data.update({'detail': _('Invite sent successfully')})
         return Response(response_data, status=status.HTTP_201_CREATED)
-
+    
     def list(self, request):
         serializer = InviteListSerializer(self.get_queryset(), many=True)
         return Response(serializer.data)
