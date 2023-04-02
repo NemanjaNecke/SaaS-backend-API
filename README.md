@@ -4,6 +4,8 @@
 
 This SaaS application, built using Django and DRF with a SQLite database, offers custom registration managed by an admin user. Users log in using their email and password, with IP checking for added security. If logging in from a different IP, users are sent an email to verify the login. The application has three types of users: superadmins, admins, and regular users. Superadmins can assign admins, create, activate and deactivate companies, while every admin has access to their own company only. Admins can send registration invites and create tasks for users. Users can create tasks for themselves or others, and notifications are sent for unfinished tasks. Analytics for all tasks are also available, and users receive email notifications for new tasks assigned to them. All users have their own profiles with their information that can be changed and the task count.
 
+It's deployed on pythonanywhere.com and it's frontend is built in angular. You can check it in the repository https://github.com/NemanjaNecke/admin and on https://admin-intern.firebaseapp.com/
+
 ## Run
 
 ```
@@ -203,8 +205,6 @@ or
 
 * User needs to be logged in to access this endpoint. Only username and personal info is editable.
 * Accepts PUT and PATCH requests
-
-
 * `/tasks/notification_email`: Sends a notification email to the user about their tasks.
 * `/tasks/notification_count/`: Returns the count of notification emails that the user has received.
 * `/tasks/analytics`: Returns the analytics data for tasks.

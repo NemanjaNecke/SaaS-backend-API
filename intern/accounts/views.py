@@ -33,7 +33,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Sum,  F
+from django.db.models import Count, Sum
 from django.contrib import messages
 from django.shortcuts import render
 from django.db.models.functions import TruncMonth
@@ -100,7 +100,7 @@ class CompanyViewSet(mixins.CreateModelMixin,
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
     lookup_field = 'name'
-    
+
 
     @action(detail=False, methods=['create'])
     def create(self, request, *args, **kwargs):
@@ -171,30 +171,34 @@ class InvitationViewSet(viewsets.ModelViewSet):
         # Return the full queryset, filtered by the company if the user is a company admin
         elif company_admin:
             queryset = queryset.filter(Q(invited_by=account))
-        
+
         return queryset
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return []
+        else:
+            return super().get_permissions()
+
 
     def create(self, request):
         serializer = self.get_serializer(
             data=request.data, context={'request': request})
+        invited_by = request.data.get('invited_by')
+        if invited_by is None:
+                admin = Account.objects.filter(is_superuser=True).first()
+                request.data['invited_by'] = admin.id
         try:
             serializer.is_valid(raise_exception=True)
             invitation = Invitation(**serializer.validated_data)
-            invited_by = invitation.invited_by
-
-            # Set the default admin as the invited_by user if the field is None
-            if invited_by is None:
-                admin = Account.objects.get(is_superuser=True)
-                invitation.invited_by = admin
-
             invitation = serializer.save(invitation, request)
             response_data = serializer.data
+
         except ValidationError as e:
             return Response({'error': e.detail}, status=status.HTTP_400_BAD_REQUEST)
 
         response_data.update({'detail': _('Invite sent successfully')})
         return Response(response_data, status=status.HTTP_201_CREATED)
-    
     def list(self, request):
         serializer = InviteListSerializer(self.get_queryset(), many=True)
         return Response(serializer.data)
@@ -211,7 +215,7 @@ class InviteOnlyRegistrationView(RegisterView):
         email = uid[0]
         self.company = uid[1]
         '''
-        Check if a valid invitation exists in the database 
+        Check if a valid invitation exists in the database
         for the given email address and token
         '''
         invitation = Invitation.objects.filter(email=email).first()
@@ -282,7 +286,7 @@ class UserAccountView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
-        
+
 class UserAccounts(generics.ListAPIView):
     serializer_class = AccountListSerializer
     queryset = Account.objects.all()
@@ -378,16 +382,15 @@ class TaskView(viewsets.ModelViewSet):
             return Response({'detail': _('Method not allowed')}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def list(self, request):
- 
+
         # Get the filtered queryset using the filter set
         queryset = self.filter_queryset(self.get_queryset())
         # Get analytics
-        analytics = self.get_analytics(request, queryset)
        # Pagination
         page = self.paginate_queryset(queryset)
         # if page is not None:
         #     serializer = TaskSerializer(page, many=True)
-        #     return 
+        #     return
         # Get serializer
         serializer = ResponseTaskSeriliazer(queryset, many=True)
         # Check if the user is a superadmin or a companyadmin
@@ -411,7 +414,7 @@ class TaskView(viewsets.ModelViewSet):
             'total_tasks': 0,
             'tasks_value_per_priority': [],
             'task_per_status':[],
-            'total_value': 0, 
+            'total_value': 0,
             'tasks_per_category': [],
             'task_value_per_category': [],
             'task_value_per_status': [],
@@ -493,7 +496,7 @@ class TaskView(viewsets.ModelViewSet):
                 'priority': task['priority'],
                 'count': task['count']
             })
-        
+
         task_data_per_month = queryset.annotate(month=TruncMonth('due_date')).values('month').annotate(count=Count('id'), value=Sum('value')).order_by('month')
         for task in task_data_per_month:
             month = task['month'].strftime("%B %Y")
@@ -505,7 +508,10 @@ class TaskView(viewsets.ModelViewSet):
                 'value': task['value'],
                 'average_val': value/count
             })
+
         return analytics
+
+
 
     def get_queryset(self):
         request = self.request
@@ -548,3 +554,4 @@ def notification_count(request):
 @api_view(['GET'])
 def notification(request):
     send_notification_expiration_email(request)
+    return Response({'email sent'})

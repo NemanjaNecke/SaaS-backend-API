@@ -6,7 +6,7 @@ from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer
 from .adapter import activate_ip
 from ipware import get_client_ip
-from allauth.account.adapter import get_adapter 
+from allauth.account.adapter import get_adapter
 from .adapter import send_registration_invite
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
@@ -18,8 +18,8 @@ from django.utils.http import urlsafe_base64_decode as uid_decoder
 from django.contrib.auth.forms import PasswordResetForm
 from .models import Task
 from rest_framework import status
-from allauth.account.models import EmailAddress
-from django.utils.translation import gettext_lazy as _
+
+
 
 class IPAddressSerializer(serializers.Serializer):
     class Meta:
@@ -68,18 +68,8 @@ class AccountRegisterSerializer(RegisterSerializer):
 class AccountLoginSerializer(LoginSerializer):
     username = None
 
-    def authenticate(self,**options):
+    def authenticate(self, **options):
         return authenticate(self.context["request"], **options)
-    @staticmethod
-    def validate_email_verification_status(request,user):
-        email = EmailAddress.objects.filter(email=user.email).first()
-        from allauth.account import app_settings
-        if (
-            app_settings.EMAIL_VERIFICATION == app_settings.EmailVerificationMethod.MANDATORY
-            and not email.verified
-        ):
-            email.send_confirmation(request)
-            raise serializers.ValidationError(_('E-mail is not verified.'))
 
     def validate(self, attrs):
         email = attrs.get("email")
@@ -100,14 +90,14 @@ class AccountLoginSerializer(LoginSerializer):
                     raise serializers.ValidationError(msg, code="authorization")
                 if not user:
                     msg = "Invalid credentials."
-                    raise serializers.ValidationError(msg, code="authorization")      
+                    raise serializers.ValidationError(msg, code="authorization")
             except ObjectDoesNotExist:
                 msg = "Invalid credentials."
                 raise serializers.ValidationError(msg, code="authorization")
         else:
             msg = "No email provided."
             raise exceptions.ValidationError(msg)
-        self.validate_email_verification_status(self.context["request"],user)
+        self.validate_email_verification_status(user)
 
         attrs["user"] = user
 
@@ -149,7 +139,7 @@ class AccountListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
         fields = ['id','email', 'first_name', 'last_name', 'company']
-        read_only_fields = ('pk', 'email', 'ip_address')        
+        read_only_fields = ('pk', 'email', 'ip_address')
 
 class PasswordResetSerializer(PasswordResetSerializer):
     @property
@@ -195,12 +185,13 @@ class InvitationSerializer(serializers.ModelSerializer):
     def get_cleaned_data(self):
         return {
             "email": self.validated_data.get("email", ""),
-            "invited_by": self.validated_data.get("invited_by","")
+            "invited_by": self.validated_data.get("invited_by", None)
         }
 
-    def save(self, instance, request):        
+    def save(self, instance, request):
         self.cleaned_data = self.get_cleaned_data()
         instance.email = self.cleaned_data.get("email")
+        instance.invited_by = self.cleaned_data.get("invited_by")
         instance.invited_by = self.cleaned_data.get("invited_by")
 
         try:
@@ -222,7 +213,7 @@ class AccountsSerializer(serializers.ModelSerializer):
         model = Account
         fields = ['id', "email","first_name","last_name",]
 
-        
+
 class IPAddressFullSerializer(serializers.ModelSerializer):
     account = serializers.StringRelatedField()
 
@@ -233,7 +224,7 @@ class IPAddressFullSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     company = serializers.StringRelatedField(read_only=True, required=False)
     created_by = serializers.StringRelatedField(read_only=True, required=False)
-    
+
     class Meta:
         model = Task
         fields = '__all__'
